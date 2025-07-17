@@ -1,0 +1,10 @@
+[ai]
+provider = "openai"
+base_url = "https://api.groq.com/openai/v1"
+api_key  = "your_groq_token"
+model    = "llama-3.1-70b-versatile"
+temp     = 0.7
+top_k    = 40
+max_tok  = 500
+rep_pen  = 1.2
+stop     = [ ]
