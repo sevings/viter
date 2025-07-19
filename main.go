@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 
+	"viter/internal/neural"
+	"viter/internal/prompts"
 	"viter/internal/viter"
 
 	"github.com/spf13/afero"
@@ -11,16 +13,20 @@ import (
 )
 
 func main() {
-	var path string
+	var path, lang string
 	var configPath string
 	var debug bool
-	var create bool
+	var create, meta bool
+	var score int
 	var help bool
 
 	flag.StringVar(&path, "path", ".", "Path to the book directory")
+	flag.StringVar(&lang, "lang", "en", "Language of the book")
 	flag.StringVar(&configPath, "config", "viter.toml", "Path to the configuration file")
 	flag.BoolVar(&debug, "debug", false, "Enable debug mode")
 	flag.BoolVar(&create, "create", false, "Create a new book")
+	flag.BoolVar(&meta, "meta", false, "Update book metadata")
+	flag.IntVar(&score, "score", 99, "Target score of the book")
 	flag.BoolVar(&help, "help", false, "Print the help message")
 	flag.Parse()
 
@@ -29,7 +35,7 @@ func main() {
 		return
 	}
 
-	if !create {
+	if !create && !meta {
 		printHelp()
 		return
 	}
@@ -57,12 +63,42 @@ func main() {
 	}
 
 	fs := afero.NewOsFs()
-	v, ok := viter.NewViter(cfg)
+	tg, ok := neural.NewLLM(cfg.Ai)
+	if !ok {
+		return
+	}
+	if debug {
+		tg.EnableResponseLogging(fs, path)
+	}
+
+	var pp viter.PromptProvider
+	switch lang {
+	case "ru":
+		pp = prompts.NewRuPrompts()
+	default:
+		pp = prompts.NewEnPrompts()
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
 	if !ok {
 		return
 	}
 
-	ok = v.CreateBook(fs, path)
+	if create {
+		ok = v.CreateBook(fs, path)
+	} else {
+		ok = v.LoadBook(fs, path)
+	}
+	if !ok {
+		return
+	}
+
+	if meta {
+		ok = v.UpdateMeta(score)
+		if !ok {
+			return
+		}
+	}
 }
 
 func printHelp() {
@@ -76,8 +112,14 @@ func printHelp() {
 	fmt.Println("        Path to the configuration file (default \"viter.toml\")")
 	fmt.Println("  -path string")
 	fmt.Println("        Path to the book directory (default \".\")")
+	fmt.Println("  -lang string")
+	fmt.Println("        Language of the book (default \"en\")")
 	fmt.Println("  -create")
 	fmt.Println("        Create a new book")
+	fmt.Println("  -meta")
+	fmt.Println("        Update book metadata")
+	fmt.Println("  -score int")
+	fmt.Println("        Target score of the book")
 	fmt.Println("  -debug")
 	fmt.Println("        Enable debug mode")
 	fmt.Println("  -help")
