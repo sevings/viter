@@ -39,22 +39,32 @@ Fantasy Adventure
 ## Genres
 Fantasy, Adventure, Coming of Age
 
+## Logline
+A young mage must discover her true power to save her village from an ancient evil.
+
 ## World
 A magical realm where dragons still roam
 
-## Main Characters
+## Protagonists
 ### Aria
 A young mage discovering her powers
 
 ### Gareth
 A skilled warrior with a mysterious past
 
+## Antagonists
+### Malachar
+An ancient sorcerer seeking to drain all magic from the world
+
 ## Minor Characters
 ### Elder Thorne
 The wise village elder
 
 ## Plot
-A young mage must save her village from an ancient evil`
+A young mage must save her village from an ancient evil
+
+## Title
+The Mage's Quest`
 
 	err = afero.WriteFile(fs, filepath.Join(path, "meta.md"), []byte(metaContent), 0644)
 	require.NoError(t, err)
@@ -69,6 +79,36 @@ Aria and Gareth set out to find the source of the evil`
 	err = afero.WriteFile(fs, filepath.Join(path, "plan.md"), []byte(planContent), 0644)
 	require.NoError(t, err)
 
+	// Create meta_critique.md
+	metaCritContent := `## Strengths
+Strong fantasy world-building
+
+## Improvements
+Character development could be enhanced
+
+## Impressions
+The book's metadata shows a solid foundation for a fantasy adventure story.
+
+## Score
+8`
+	err = afero.WriteFile(fs, filepath.Join(path, "meta_critique.md"), []byte(metaCritContent), 0644)
+	require.NoError(t, err)
+
+	// Create plan_critique.md
+	planCritContent := `## Strengths
+Good story structure
+
+## Improvements
+More detailed chapter outlines
+
+## Impressions
+The chapter plan provides a good structure for the story arc.
+
+## Score
+7`
+	err = afero.WriteFile(fs, filepath.Join(path, "plan_critique.md"), []byte(planCritContent), 0644)
+	require.NoError(t, err)
+
 	// Load the book
 	book, err := viter.LoadBook(fs, path)
 	require.NoError(t, err)
@@ -76,12 +116,20 @@ Aria and Gareth set out to find the source of the evil`
 
 	// Verify metadata was loaded
 	meta := book.GetMeta()
+	require.Equal(t, "The Mage's Quest", meta.GetTitle())
 	require.Equal(t, "Fantasy Adventure", meta.GetStyle())
 	require.Equal(t, []string{"Fantasy", "Adventure", "Coming of Age"}, meta.GetGenres())
+	require.Equal(t, "A young mage must discover her true power to save her village from an ancient evil.", meta.GetLogline())
 	require.Equal(t, "A magical realm where dragons still roam", meta.GetWorld())
-	require.Len(t, meta.GetMainCharacters(), 2)
-	require.Equal(t, "Aria", meta.GetMainCharacters()[0].GetName())
-	require.Equal(t, "A young mage discovering her powers", meta.GetMainCharacters()[0].GetDesc())
+	require.Len(t, meta.GetProtagonists(), 2)
+	require.Equal(t, "Aria", meta.GetProtagonists()[0].GetName())
+	require.Equal(t, "A young mage discovering her powers", meta.GetProtagonists()[0].GetDesc())
+
+	// Verify antagonist was loaded
+	antagonists := meta.GetAntagonists()
+	require.Len(t, antagonists, 1)
+	require.Equal(t, "Malachar", antagonists[0].GetName())
+	require.Equal(t, "An ancient sorcerer seeking to drain all magic from the world", antagonists[0].GetDesc())
 
 	// Verify plan was loaded
 	plan := book.GetPlan()
@@ -91,6 +139,21 @@ Aria and Gareth set out to find the source of the evil`
 	require.NoError(t, err)
 	require.Equal(t, "Chapter 1: The Awakening", chapter1.GetTitle())
 	require.Equal(t, "Aria discovers her magical abilities when her village is attacked", chapter1.GetContent())
+
+	// Verify critiques were loaded
+	metaCrit := book.GetMetaCrit()
+	require.NotNil(t, metaCrit)
+	require.Equal(t, "Strong fantasy world-building", metaCrit.GetStrengths())
+	require.Equal(t, "Character development could be enhanced", metaCrit.GetImprovements())
+	require.Equal(t, "The book's metadata shows a solid foundation for a fantasy adventure story.", metaCrit.GetImpressions())
+	require.Equal(t, 8, metaCrit.GetScore())
+
+	planCrit := book.GetPlanCrit()
+	require.NotNil(t, planCrit)
+	require.Equal(t, "Good story structure", planCrit.GetStrengths())
+	require.Equal(t, "More detailed chapter outlines", planCrit.GetImprovements())
+	require.Equal(t, "The chapter plan provides a good structure for the story arc.", planCrit.GetImpressions())
+	require.Equal(t, 7, planCrit.GetScore())
 }
 
 func TestLoadBookNonExistent(t *testing.T) {
@@ -98,16 +161,9 @@ func TestLoadBookNonExistent(t *testing.T) {
 	path := "/nonexistent/book"
 
 	book, err := viter.LoadBook(fs, path)
-	require.NoError(t, err)
-	require.NotNil(t, book)
-
-	// Should have empty metadata and plan
-	meta := book.GetMeta()
-	require.Empty(t, meta.GetStyle())
-	require.Empty(t, meta.GetGenres())
-
-	plan := book.GetPlan()
-	require.Empty(t, plan)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrNoMetaFile, err)
+	require.Nil(t, book)
 }
 
 func TestBookSave(t *testing.T) {
@@ -118,11 +174,11 @@ func TestBookSave(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set metadata
-	meta := viter.BookMeta{}
+	meta := &viter.BookMeta{}
 	meta.SetStyle("Science Fiction")
 	meta.SetGenres([]string{"Sci-Fi", "Thriller"})
 	meta.SetWorld("A dystopian future")
-	meta.SetMainCharacters([]viter.Character{
+	meta.SetProtagonists([]viter.Character{
 		viter.NewCharacter("Alex", "A rebel hacker"),
 	})
 	meta.SetPlot("The fight against a totalitarian regime")
@@ -268,15 +324,22 @@ Epic Fantasy
 ## Genres
 Fantasy, Adventure, Magic
 
+## Logline
+A young sorceress must master ancient magic to prevent the world's destruction.
+
 ## World
 A world where magic flows through ancient ley lines
 
-## Main Characters
+## Protagonists
 ### Lyra
 A young sorceress with untapped potential
 
 ### Thane
 A gruff dwarf warrior with a heart of gold
+
+## Antagonists
+### Lord Shadowbane
+An ancient necromancer seeking to corrupt all magic
 
 ## Minor Characters
 ### Wizard Aldric
@@ -286,16 +349,21 @@ The mentor figure who guides our heroes
 The ruler of the northern kingdom
 
 ## Plot
-An ancient evil stirs, threatening to destroy the delicate balance of magic in the world`
+An ancient evil stirs, threatening to destroy the delicate balance of magic in the world
+
+## Title
+The Chronicles of Lyra`
 
 	meta, err := viter.MetaFromString(metaStr)
 	require.NoError(t, err)
 
+	require.Equal(t, "The Chronicles of Lyra", meta.GetTitle())
 	require.Equal(t, "Epic Fantasy", meta.GetStyle())
 	require.Equal(t, []string{"Fantasy", "Adventure", "Magic"}, meta.GetGenres())
+	require.Equal(t, "A young sorceress must master ancient magic to prevent the world's destruction.", meta.GetLogline())
 	require.Equal(t, "A world where magic flows through ancient ley lines", meta.GetWorld())
 
-	mainChars := meta.GetMainCharacters()
+	mainChars := meta.GetProtagonists()
 	require.Len(t, mainChars, 2)
 	require.Equal(t, "Lyra", mainChars[0].GetName())
 	require.Equal(t, "A young sorceress with untapped potential", mainChars[0].GetDesc())
@@ -307,33 +375,51 @@ An ancient evil stirs, threatening to destroy the delicate balance of magic in t
 	require.Equal(t, "Wizard Aldric", minorChars[0].GetName())
 	require.Equal(t, "The mentor figure who guides our heroes", minorChars[0].GetDesc())
 
+	// Verify antagonist was loaded
+	antagonists := meta.GetAntagonists()
+	require.Len(t, antagonists, 1)
+	require.Equal(t, "Lord Shadowbane", antagonists[0].GetName())
+	require.Equal(t, "An ancient necromancer seeking to corrupt all magic", antagonists[0].GetDesc())
+
 	require.Equal(t, "An ancient evil stirs, threatening to destroy the delicate balance of magic in the world", meta.GetPlot())
 }
 
 func TestMetaString(t *testing.T) {
 	meta := viter.BookMeta{}
+	meta.SetTitle("Blood and Badges")
 	meta.SetStyle("Urban Fantasy")
 	meta.SetGenres([]string{"Fantasy", "Mystery", "Urban"})
+	meta.SetLogline("When the supernatural meets police procedure, unlikely alliances form.")
 	meta.SetWorld("Modern city with hidden supernatural elements")
-	meta.SetMainCharacters([]viter.Character{
+	meta.SetProtagonists([]viter.Character{
 		viter.NewCharacter("Detective Sarah", "A cop who discovers the supernatural"),
 		viter.NewCharacter("Marcus", "A vampire trying to solve his own murder"),
 	})
 	meta.SetMinorCharacters([]viter.Character{
 		viter.NewCharacter("Chief Williams", "Sarah's skeptical boss"),
 	})
+	meta.SetAntagonists([]viter.Character{
+		viter.NewCharacter("The Syndicate Leader", "A powerful vampire controlling the city's underworld"),
+	})
 	meta.SetPlot("A detective and vampire must work together to solve supernatural crimes")
 
 	result := meta.String()
+	require.Contains(t, result, "## Title")
+	require.Contains(t, result, "Blood and Badges")
 	require.Contains(t, result, "## Style")
 	require.Contains(t, result, "Urban Fantasy")
 	require.Contains(t, result, "## Genres")
 	require.Contains(t, result, "Fantasy, Mystery, Urban")
+	require.Contains(t, result, "## Logline")
+	require.Contains(t, result, "When the supernatural meets police procedure, unlikely alliances form.")
 	require.Contains(t, result, "## World")
 	require.Contains(t, result, "Modern city with hidden supernatural elements")
-	require.Contains(t, result, "## Main Characters")
+	require.Contains(t, result, "## Protagonists")
 	require.Contains(t, result, "### Detective Sarah")
 	require.Contains(t, result, "A cop who discovers the supernatural")
+	require.Contains(t, result, "## Antagonists")
+	require.Contains(t, result, "### The Syndicate Leader")
+	require.Contains(t, result, "A powerful vampire controlling the city's underworld")
 	require.Contains(t, result, "## Minor Characters")
 	require.Contains(t, result, "### Chief Williams")
 	require.Contains(t, result, "## Plot")
@@ -426,7 +512,7 @@ func TestRoundTripMetadata(t *testing.T) {
 	original.SetStyle("Space Opera")
 	original.SetGenres([]string{"Science Fiction", "Adventure"})
 	original.SetWorld("A galaxy far, far away")
-	original.SetMainCharacters([]viter.Character{
+	original.SetProtagonists([]viter.Character{
 		viter.NewCharacter("Captain Nova", "A fearless space explorer"),
 	})
 	original.SetPlot("The quest to save the galaxy")
@@ -441,8 +527,8 @@ func TestRoundTripMetadata(t *testing.T) {
 	require.Equal(t, original.GetGenres(), parsed.GetGenres())
 	require.Equal(t, original.GetWorld(), parsed.GetWorld())
 	require.Equal(t, original.GetPlot(), parsed.GetPlot())
-	require.Len(t, parsed.GetMainCharacters(), 1)
-	require.Equal(t, "Captain Nova", parsed.GetMainCharacters()[0].GetName())
+	require.Len(t, parsed.GetProtagonists(), 1)
+	require.Equal(t, "Captain Nova", parsed.GetProtagonists()[0].GetName())
 }
 
 func TestRoundTripChapter(t *testing.T) {
@@ -487,16 +573,21 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up complete metadata
-	meta := viter.BookMeta{}
+	meta := &viter.BookMeta{}
+	meta.SetTitle("Shadows of Millbrook")
 	meta.SetStyle("Horror")
 	meta.SetGenres([]string{"Horror", "Thriller", "Supernatural"})
+	meta.SetLogline("In a town where the dead don't rest, the living must face their darkest fears.")
 	meta.SetWorld("A small town with dark secrets")
-	meta.SetMainCharacters([]viter.Character{
+	meta.SetProtagonists([]viter.Character{
 		viter.NewCharacter("Dr. Emma Carter", "A psychiatrist who uncovers the truth"),
 		viter.NewCharacter("Father Miguel", "A priest battling ancient evils"),
 	})
 	meta.SetMinorCharacters([]viter.Character{
 		viter.NewCharacter("Sheriff Brooks", "The local law enforcement"),
+	})
+	meta.SetAntagonists([]viter.Character{
+		viter.NewCharacter("The Hollow Man", "An ancient spirit seeking revenge"),
 	})
 	meta.SetPlot("A town's buried secrets come back to haunt the living")
 
@@ -511,6 +602,25 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	}
 
 	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Set up critiques
+	metaCrit := &viter.Critique{
+		Strengths:    "Well-developed characters",
+		Improvements: "Need more horror elements",
+		Impressions:  "The horror elements are well-balanced with character development.",
+		Score:        8,
+	}
+	err = book.SetMetaCrit(metaCrit)
+	require.NoError(t, err)
+
+	planCrit := &viter.Critique{
+		Strengths:    "Good pacing",
+		Improvements: "More detailed chapter outlines",
+		Impressions:  "The three-act structure provides good pacing for building tension.",
+		Score:        7,
+	}
+	err = book.SetPlanCrit(planCrit)
 	require.NoError(t, err)
 
 	// Save everything
@@ -528,10 +638,18 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 
 	// Verify metadata was preserved
 	loadedMeta := loadedBook.GetMeta()
+	require.Equal(t, "Shadows of Millbrook", loadedMeta.GetTitle())
 	require.Equal(t, "Horror", loadedMeta.GetStyle())
 	require.Equal(t, []string{"Horror", "Thriller", "Supernatural"}, loadedMeta.GetGenres())
-	require.Len(t, loadedMeta.GetMainCharacters(), 2)
-	require.Equal(t, "Dr. Emma Carter", loadedMeta.GetMainCharacters()[0].GetName())
+	require.Equal(t, "In a town where the dead don't rest, the living must face their darkest fears.", loadedMeta.GetLogline())
+	require.Len(t, loadedMeta.GetProtagonists(), 2)
+	require.Equal(t, "Dr. Emma Carter", loadedMeta.GetProtagonists()[0].GetName())
+
+	// Verify antagonist was preserved
+	antagonists := loadedMeta.GetAntagonists()
+	require.Len(t, antagonists, 1)
+	require.Equal(t, "The Hollow Man", antagonists[0].GetName())
+	require.Equal(t, "An ancient spirit seeking revenge", antagonists[0].GetDesc())
 
 	// Verify plan was preserved
 	loadedPlan := loadedBook.GetPlan()
@@ -549,4 +667,103 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(chapterContent), "Chapter 1: Arrival - The Beginning")
 	require.Contains(t, string(chapterContent), "Dr. Emma Carter stepped off the bus")
+
+	// Verify critiques were preserved
+	loadedMetaCrit := loadedBook.GetMetaCrit()
+	require.NotNil(t, loadedMetaCrit)
+	require.Equal(t, metaCrit.GetStrengths(), loadedMetaCrit.GetStrengths())
+	require.Equal(t, metaCrit.GetImprovements(), loadedMetaCrit.GetImprovements())
+	require.Equal(t, metaCrit.GetImpressions(), loadedMetaCrit.GetImpressions())
+	require.Equal(t, metaCrit.GetScore(), loadedMetaCrit.GetScore())
+
+	loadedPlanCrit := loadedBook.GetPlanCrit()
+	require.NotNil(t, loadedPlanCrit)
+	require.Equal(t, planCrit.GetStrengths(), loadedPlanCrit.GetStrengths())
+	require.Equal(t, planCrit.GetImprovements(), loadedPlanCrit.GetImprovements())
+	require.Equal(t, planCrit.GetImpressions(), loadedPlanCrit.GetImpressions())
+	require.Equal(t, planCrit.GetScore(), loadedPlanCrit.GetScore())
+
+	// Verify critique files were created
+	metaCritExists, err := afero.Exists(fs, filepath.Join(path, "meta_critique.md"))
+	require.NoError(t, err)
+	require.True(t, metaCritExists)
+
+	planCritExists, err := afero.Exists(fs, filepath.Join(path, "plan_critique.md"))
+	require.NoError(t, err)
+	require.True(t, planCritExists)
+}
+
+func TestBookMetaCritGettersSetters(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Test meta critique
+	metaCrit := &viter.Critique{
+		Strengths:    "Good foundation",
+		Improvements: "More detail needed",
+		Impressions:  "This is a meta critique for testing purposes.",
+		Score:        6,
+	}
+	err = book.SetMetaCrit(metaCrit)
+	require.NoError(t, err)
+	require.Equal(t, metaCrit, book.GetMetaCrit())
+
+	// Test plan critique
+	planCrit := &viter.Critique{
+		Strengths:    "Clear structure",
+		Improvements: "Better pacing",
+		Impressions:  "This is a plan critique for testing purposes.",
+		Score:        5,
+	}
+	err = book.SetPlanCrit(planCrit)
+	require.NoError(t, err)
+	require.Equal(t, planCrit, book.GetPlanCrit())
+
+	// Verify files were created
+	metaCritExists, err := afero.Exists(fs, filepath.Join(path, "meta_critique.md"))
+	require.NoError(t, err)
+	require.True(t, metaCritExists)
+
+	planCritExists, err := afero.Exists(fs, filepath.Join(path, "plan_critique.md"))
+	require.NoError(t, err)
+	require.True(t, planCritExists)
+}
+
+func TestRoundTripCritiques(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/critique"
+
+	// Create book
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set critiques
+	metaCrit := &viter.Critique{
+		Strengths:    "Good concept",
+		Improvements: "More character development",
+		Impressions:  "The metadata needs more character development details.",
+		Score:        6,
+	}
+	planCrit := &viter.Critique{
+		Strengths:    "Good structure",
+		Improvements: "More detailed outlines",
+		Impressions:  "The chapter structure could benefit from more detailed outlines.",
+		Score:        7,
+	}
+
+	err = book.SetMetaCrit(metaCrit)
+	require.NoError(t, err)
+
+	err = book.SetPlanCrit(planCrit)
+	require.NoError(t, err)
+
+	// Load fresh book and verify critiques persist
+	loadedBook, err := viter.LoadBook(fs, path)
+	require.NoError(t, err)
+
+	require.Equal(t, metaCrit, loadedBook.GetMetaCrit())
+	require.Equal(t, planCrit, loadedBook.GetPlanCrit())
 }

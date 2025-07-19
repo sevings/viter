@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -13,19 +14,23 @@ var (
 	ErrInvalidChapterIndex = errors.New("invalid chapter index")
 	ErrEmptyChapterString  = errors.New("empty chapter string")
 	ErrNoTitleFound        = errors.New("no title found in chapter string")
+	ErrNoMetaFile          = errors.New("no meta file found")
 )
 
 type Book struct {
 	fs   afero.Fs
 	path string
-	meta BookMeta
+	meta *BookMeta
 	plan Plan
+
+	metaCrit *Critique
+	planCrit *Critique
 }
 
 // CreateBook creates a new book with the given filesystem and path.
 // it creates a file 'meta.md' and initializes the book's metadata.
 func CreateBook(fs afero.Fs, path string) (*Book, error) {
-	b := &Book{fs: fs, path: path, meta: BookMeta{}}
+	b := &Book{fs: fs, path: path, meta: &BookMeta{}}
 	if err := b.Save(); err != nil {
 		return nil, err
 	}
@@ -41,17 +46,19 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	metaPath := filepath.Join(path, "meta.md")
 	if exists, err := afero.Exists(fs, metaPath); err != nil {
 		return nil, err
-	} else if exists {
-		content, err := afero.ReadFile(fs, metaPath)
-		if err != nil {
-			return nil, err
-		}
-		meta, err := MetaFromString(string(content))
-		if err != nil {
-			return nil, err
-		}
-		b.meta = meta
+	} else if !exists {
+		return nil, ErrNoMetaFile
 	}
+
+	content, err := afero.ReadFile(fs, metaPath)
+	if err != nil {
+		return nil, err
+	}
+	meta, err := MetaFromString(string(content))
+	if err != nil {
+		return nil, err
+	}
+	b.meta = meta
 
 	// Load plan if it exists
 	planPath := filepath.Join(path, "plan.md")
@@ -67,6 +74,38 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 			return nil, err
 		}
 		b.plan = plan
+	}
+
+	// Load meta critique if it exists
+	metaCritPath := filepath.Join(path, "meta_critique.md")
+	if exists, err := afero.Exists(fs, metaCritPath); err != nil {
+		return nil, err
+	} else if exists {
+		content, err := afero.ReadFile(fs, metaCritPath)
+		if err != nil {
+			return nil, err
+		}
+		crit, err := CritiqueFromString(string(content))
+		if err != nil {
+			return nil, err
+		}
+		b.metaCrit = crit
+	}
+
+	// Load plan critique if it exists
+	planCritPath := filepath.Join(path, "plan_critique.md")
+	if exists, err := afero.Exists(fs, planCritPath); err != nil {
+		return nil, err
+	} else if exists {
+		content, err := afero.ReadFile(fs, planCritPath)
+		if err != nil {
+			return nil, err
+		}
+		crit, err := CritiqueFromString(string(content))
+		if err != nil {
+			return nil, err
+		}
+		b.planCrit = crit
 	}
 
 	return b, nil
@@ -85,6 +124,18 @@ func (b *Book) Save() error {
 
 	if len(b.plan) > 0 {
 		if err := b.savePlan(); err != nil {
+			return err
+		}
+	}
+
+	if b.metaCrit != nil {
+		if err := b.saveMetaCrit(); err != nil {
+			return err
+		}
+	}
+
+	if b.planCrit != nil {
+		if err := b.savePlanCrit(); err != nil {
 			return err
 		}
 	}
@@ -108,13 +159,32 @@ func (b *Book) savePlan() error {
 	return nil
 }
 
-// SetMeta sets the book's metadata and saves it to the filesystem.
-func (b *Book) SetMeta(meta BookMeta) error {
-	b.meta = meta
-	return b.saveMeta()
+func (b *Book) saveMetaCrit() error {
+	metaCritPath := filepath.Join(b.path, "meta_critique.md")
+	if err := afero.WriteFile(b.fs, metaCritPath, []byte(b.metaCrit.String()), 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (b *Book) GetMeta() BookMeta {
+func (b *Book) savePlanCrit() error {
+	planCritPath := filepath.Join(b.path, "plan_critique.md")
+	if err := afero.WriteFile(b.fs, planCritPath, []byte(b.planCrit.String()), 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetMeta sets the book's metadata and saves it to the filesystem.
+func (b *Book) SetMeta(meta *BookMeta) error {
+	if upd := b.meta.merge(meta); upd {
+		return b.saveMeta()
+	}
+
+	return nil
+}
+
+func (b *Book) GetMeta() *BookMeta {
 	return b.meta
 }
 
@@ -147,13 +217,44 @@ func (b *Book) SaveChapter(i int, chapter Chapter) error {
 	return afero.WriteFile(b.fs, chapterPath, []byte(chapter.String()), 0644)
 }
 
+func (b *Book) GetFs() afero.Fs {
+	return b.fs
+}
+
+func (b *Book) GetFilePath() string {
+	return b.path
+}
+
+// SetMetaCrit sets the book's meta critique and saves it to the filesystem.
+func (b *Book) SetMetaCrit(metaCrit *Critique) error {
+	b.metaCrit = metaCrit
+	return b.saveMetaCrit()
+}
+
+func (b *Book) GetMetaCrit() *Critique {
+	return b.metaCrit
+}
+
+// SetPlanCrit sets the book's plan critique and saves it to the filesystem.
+func (b *Book) SetPlanCrit(planCrit *Critique) error {
+	b.planCrit = planCrit
+	return b.savePlanCrit()
+}
+
+func (b *Book) GetPlanCrit() *Critique {
+	return b.planCrit
+}
+
 type BookMeta struct {
-	style      string
-	genres     []string
-	world      string
-	mainChars  []Character
-	minorChars []Character
-	plot       string
+	style        string
+	genres       []string
+	logline      string
+	world        string
+	protagonists []Character
+	antagonists  []Character
+	minorChars   []Character
+	plot         string
+	title        string
 }
 
 type Character struct {
@@ -180,9 +281,14 @@ func (c Character) GetDesc() string {
 // {style}
 // ## Genres
 // {genres comma separated}
+// ## Logline
+// {logline}
 // ## World
 // {world}
-// ## Main Characters
+// ## Protagonists
+// ### {name}
+// {description}
+// ## Antagonists
 // ### {name}
 // {description}
 // ## Minor Characters
@@ -190,9 +296,11 @@ func (c Character) GetDesc() string {
 // {description}
 // ## Plot
 // {plot}
+// ## Title
+// {title}
 // ```
-func MetaFromString(s string) (BookMeta, error) {
-	meta := BookMeta{}
+func MetaFromString(s string) (*BookMeta, error) {
+	meta := &BookMeta{}
 
 	// Split by sections
 	sections := strings.SplitSeq(s, "\n## ")
@@ -224,14 +332,20 @@ func MetaFromString(s string) (BookMeta, error) {
 				genres[i] = strings.TrimSpace(genre)
 			}
 			meta.genres = genres
+		case "## Logline":
+			meta.logline = content
 		case "## World":
 			meta.world = content
-		case "## Main Characters":
-			meta.mainChars = parseCharacters(content)
+		case "## Protagonists":
+			meta.protagonists = parseCharacters(content)
+		case "## Antagonists":
+			meta.antagonists = parseCharacters(content)
 		case "## Minor Characters":
 			meta.minorChars = parseCharacters(content)
 		case "## Plot":
 			meta.plot = content
+		case "## Title":
+			meta.title = content
 		}
 	}
 
@@ -284,12 +398,26 @@ func (bm *BookMeta) String() string {
 	sb.WriteString(strings.Join(bm.genres, ", "))
 	sb.WriteString("\n\n")
 
+	sb.WriteString("## Logline\n")
+	sb.WriteString(bm.logline)
+	sb.WriteString("\n\n")
+
 	sb.WriteString("## World\n")
 	sb.WriteString(bm.world)
 	sb.WriteString("\n\n")
 
-	sb.WriteString("## Main Characters\n")
-	for _, char := range bm.mainChars {
+	sb.WriteString("## Protagonists\n")
+	for _, char := range bm.protagonists {
+		sb.WriteString("### ")
+		sb.WriteString(char.name)
+		sb.WriteString("\n")
+		sb.WriteString(char.desc)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Antagonists\n")
+	for _, char := range bm.antagonists {
 		sb.WriteString("### ")
 		sb.WriteString(char.name)
 		sb.WriteString("\n")
@@ -310,8 +438,53 @@ func (bm *BookMeta) String() string {
 
 	sb.WriteString("## Plot\n")
 	sb.WriteString(bm.plot)
+	sb.WriteString("\n\n")
+
+	sb.WriteString("## Title\n")
+	sb.WriteString(bm.title)
 
 	return sb.String()
+}
+
+func (bm *BookMeta) merge(other *BookMeta) bool {
+	changed := false
+	if other.style != "" {
+		bm.style = other.style
+		changed = true
+	}
+	if len(other.genres) > 0 {
+		bm.genres = other.genres
+		changed = true
+	}
+	if other.logline != "" {
+		bm.logline = other.logline
+		changed = true
+	}
+	if other.world != "" {
+		bm.world = other.world
+		changed = true
+	}
+	if len(other.protagonists) > 0 {
+		bm.protagonists = other.protagonists
+		changed = true
+	}
+	if len(other.antagonists) > 0 {
+		bm.antagonists = other.antagonists
+		changed = true
+	}
+	if len(other.minorChars) > 0 {
+		bm.minorChars = other.minorChars
+		changed = true
+	}
+	if other.plot != "" {
+		bm.plot = other.plot
+		changed = true
+	}
+	if other.title != "" {
+		bm.title = other.title
+		changed = true
+	}
+	return changed
 }
 
 func (bm *BookMeta) GetStyle() string {
@@ -322,12 +495,20 @@ func (bm *BookMeta) GetGenres() []string {
 	return bm.genres
 }
 
+func (bm *BookMeta) GetLogline() string {
+	return bm.logline
+}
+
 func (bm *BookMeta) GetWorld() string {
 	return bm.world
 }
 
-func (bm *BookMeta) GetMainCharacters() []Character {
-	return bm.mainChars
+func (bm *BookMeta) GetProtagonists() []Character {
+	return bm.protagonists
+}
+
+func (bm *BookMeta) GetAntagonists() []Character {
+	return bm.antagonists
 }
 
 func (bm *BookMeta) GetMinorCharacters() []Character {
@@ -338,6 +519,10 @@ func (bm *BookMeta) GetPlot() string {
 	return bm.plot
 }
 
+func (bm *BookMeta) GetTitle() string {
+	return bm.title
+}
+
 func (bm *BookMeta) SetStyle(style string) {
 	bm.style = style
 }
@@ -346,12 +531,20 @@ func (bm *BookMeta) SetGenres(genres []string) {
 	bm.genres = genres
 }
 
+func (bm *BookMeta) SetLogline(logline string) {
+	bm.logline = logline
+}
+
 func (bm *BookMeta) SetWorld(world string) {
 	bm.world = world
 }
 
-func (bm *BookMeta) SetMainCharacters(chars []Character) {
-	bm.mainChars = chars
+func (bm *BookMeta) SetProtagonists(chars []Character) {
+	bm.protagonists = chars
+}
+
+func (bm *BookMeta) SetAntagonists(antagonists []Character) {
+	bm.antagonists = antagonists
 }
 
 func (bm *BookMeta) SetMinorCharacters(chars []Character) {
@@ -360,6 +553,22 @@ func (bm *BookMeta) SetMinorCharacters(chars []Character) {
 
 func (bm *BookMeta) SetPlot(plot string) {
 	bm.plot = plot
+}
+
+func (bm *BookMeta) SetTitle(title string) {
+	bm.title = title
+}
+
+func (bm *BookMeta) IsFilled() bool {
+	return bm.style != "" &&
+		len(bm.genres) > 0 &&
+		bm.logline != "" &&
+		bm.world != "" &&
+		len(bm.protagonists) > 0 &&
+		len(bm.antagonists) > 0 &&
+		len(bm.minorChars) > 0 &&
+		bm.plot != "" &&
+		bm.title != ""
 }
 
 type Chapter struct {
@@ -474,4 +683,111 @@ func (p Plan) String() string {
 		sb.WriteString(chapter.String())
 	}
 	return sb.String()
+}
+
+type Critique struct {
+	Strengths    string
+	Improvements string
+	Impressions  string
+	Score        int
+}
+
+// CritiqueFromString parses a string into a Critique struct.
+// Format:
+// ```
+// ## Strengths
+// {content}
+// ## Improvements
+// {content}
+// ## Impressions
+// {content}
+// ## Score
+// {number}
+// ```
+func CritiqueFromString(s string) (*Critique, error) {
+	c := &Critique{}
+
+	if s == "" {
+		return c, nil
+	}
+
+	// Split by sections
+	sections := strings.SplitSeq(s, "\n## ")
+	for section := range sections {
+		section = strings.TrimSpace(section)
+		if section == "" {
+			continue
+		}
+
+		// Add back the ## if it was removed by split
+		if !strings.HasPrefix(section, "## ") {
+			section = "## " + section
+		}
+
+		// Handle "## Score" format with number on same or next line
+		if strings.HasPrefix(section, "## Score") {
+			// Check if score is on same line after space
+			if len(section) > 8 && section[8] == ' ' {
+				scoreStr := strings.TrimSpace(section[9:])
+				if score, err := strconv.Atoi(scoreStr); err == nil {
+					c.Score = score
+				}
+			} else {
+				// Score might be on next line, so don't continue - let it fall through
+			}
+		}
+
+		lines := strings.SplitN(section, "\n", 2)
+		if len(lines) < 2 {
+			continue
+		}
+
+		header := strings.TrimSpace(lines[0])
+		content := strings.TrimSpace(lines[1])
+
+		switch header {
+		case "## Strengths":
+			c.Strengths = content
+		case "## Improvements":
+			c.Improvements = content
+		case "## Impressions":
+			c.Impressions = content
+		case "## Score":
+			// Handle "## Score\n6" format (score on next line)
+			if score, err := strconv.Atoi(content); err == nil {
+				c.Score = score
+			}
+		}
+	}
+
+	return c, nil
+}
+
+func (c Critique) String() string {
+	var sb strings.Builder
+	sb.WriteString("## Strengths\n")
+	sb.WriteString(c.Strengths)
+	sb.WriteString("\n\n## Improvements\n")
+	sb.WriteString(c.Improvements)
+	sb.WriteString("\n\n## Impressions\n")
+	sb.WriteString(c.Impressions)
+	sb.WriteString("\n\n## Score\n")
+	sb.WriteString(strconv.Itoa(c.Score))
+	return sb.String()
+}
+
+func (c Critique) GetStrengths() string {
+	return c.Strengths
+}
+
+func (c Critique) GetImprovements() string {
+	return c.Improvements
+}
+
+func (c Critique) GetImpressions() string {
+	return c.Impressions
+}
+
+func (c Critique) GetScore() int {
+	return c.Score
 }
