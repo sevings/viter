@@ -1,5 +1,9 @@
 package prompts
 
+import (
+	"fmt"
+)
+
 type enPrompts struct{}
 
 func NewEnPrompts() *enPrompts {
@@ -63,4 +67,50 @@ func (p *enPrompts) CritiqueMetaPrompt() string {
 
 func (p *enPrompts) UpdateMetaPrompt() string {
 	return `Rewrite only sections that require improvement according to the recommendations. Answer in the same format without additional comments. Skip sections that do not change.`
+}
+
+func (p *enPrompts) WritePlanPrompt(chapterCount int) string {
+	prompt := `You are an experienced novelist tasked with creating a detailed chapter-by-chapter plan for a book based on the provided metadata. Your goal is to create an engaging narrative structure that unfolds logically and keeps readers captivated throughout the story. Each chapter should advance the plot, develop characters, or reveal important information. Respond in the format provided below, with no additional explanations or commentary.
+
+## 1. [Chapter Title]
+[Provide a detailed description of what happens in this chapter, including key events, character development, conflicts, and how it sets up the story]
+
+## 2. [Chapter Title]
+[Detailed chapter description]
+
+Guidelines:
+- Create exactly the number of chapters requested
+- Each chapter should have a compelling title that hints at its content
+- Include character arcs, plot progression, and pacing
+- Ensure logical flow between chapters
+- Balance action, dialogue, character development, and world-building
+- Consider cliffhangers and hooks to maintain reader engagement
+- If chapters already exist and are well-written, skip them in your answer
+- Only rewrite or expand chapters that need improvement or are missing`
+
+	if chapterCount > 0 {
+		prompt += fmt.Sprintf("\n- Create exactly %d chapters", chapterCount)
+	}
+
+	return prompt
+}
+
+func (p *enPrompts) CritiquePlanPrompt() string {
+	return `You are a literary critic tasked with evaluating a book plan. Your role is to provide constructive feedback on the narrative structure, pacing, character development, and overall story flow. Respond in the format provided below, offering only critique and no additional explanations.
+
+## Strengths
+[Here, describe what aspects of the plan are well-executed and promising, focusing on structure, pacing, character arcs, and plot development. For example: "Strong opening that establishes stakes and character motivation. Good balance between action and character development. Logical plot progression with effective use of rising tension."]
+
+## Improvements
+[Here, offer specific suggestions for enhancement, focusing on narrative structure, character development, pacing, and plot consistency. For example: "Consider strengthening the midpoint twist to avoid sagging middle. Develop secondary character arcs more fully. Ensure each chapter ends with a compelling hook or revelation."]
+
+## Impressions
+[Here, provide a brief, overall impression of the plan's potential. For example: "The plan shows strong potential for an engaging narrative but needs refinement in pacing and character development."]
+
+## Score
+[Provide a final score from 0 to 99. Only the number is required.]`
+}
+
+func (p *enPrompts) UpdatePlanPrompt() string {
+	return `Rewrite only chapters that require improvement according to the recommendations. Answer in the same format without additional comments. Skip chapters that do not need changes.`
 }

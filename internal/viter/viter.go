@@ -10,6 +10,9 @@ type PromptProvider interface {
 	WriteMetaPrompt() string
 	CritiqueMetaPrompt() string
 	UpdateMetaPrompt() string
+	WritePlanPrompt(chapterCount int) string
+	CritiquePlanPrompt() string
+	UpdatePlanPrompt() string
 }
 
 type TextGenerator interface {
@@ -98,6 +101,46 @@ func (v *Viter) UpdateMeta(minScore int) bool {
 		}
 		v.book.SetMeta(meta)
 		v.book.SetMetaCrit(crit)
+	}
+
+	return true
+}
+
+func (v *Viter) UpdatePlan(chapterCount, minScore int) bool {
+	if v.book == nil {
+		return false
+	}
+
+	if len(v.book.GetPlan()) != chapterCount {
+		plan, ok := v.writePlan(v.book.GetPlan(), chapterCount)
+		if !ok {
+			return false
+		}
+		v.book.SetPlan(plan)
+	}
+
+	if v.book.GetPlanCrit() == nil || v.book.GetPlanCrit().GetImprovements() == "" {
+		crit, ok := v.critiquePlan(v.book.GetPlan())
+		if !ok {
+			return false
+		}
+		v.book.SetPlanCrit(crit)
+	}
+
+	for v.book.GetPlanCrit().GetScore() < minScore {
+		plan, ok := v.updatePlan(v.book.GetPlan(), v.book.GetPlanCrit())
+		if !ok {
+			return false
+		}
+		crit, ok := v.critiquePlan(plan)
+		if !ok {
+			return false
+		}
+		if crit.GetScore() <= v.book.GetPlanCrit().GetScore() {
+			return true
+		}
+		v.book.SetPlan(plan)
+		v.book.SetPlanCrit(crit)
 	}
 
 	return true
@@ -202,4 +245,110 @@ func (v *Viter) updateMeta(prevMeta *BookMeta, crit *Critique) (*BookMeta, bool)
 	v.log.Infow("updated meta")
 
 	return meta, true
+}
+
+func (v *Viter) writePlan(prevPlan Plan, chapterCount int) (Plan, bool) {
+	v.log.Infow("writing plan", "chapters", chapterCount)
+
+	messages := make([]llms.MessageContent, 2)
+	messages[0] = llms.MessageContent{
+		Role: llms.ChatMessageTypeSystem,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.pp.WritePlanPrompt(chapterCount)),
+		},
+	}
+	messages[1] = llms.MessageContent{
+		Role: llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.book.GetMeta().String()),
+		},
+	}
+	if len(prevPlan) > 0 {
+		messages[1].Parts = append(messages[1].Parts, llms.TextPart(prevPlan.String()))
+	}
+
+	planData, ok := v.tg.GenerateText(messages)
+	if !ok {
+		return nil, false
+	}
+
+	plan, err := PlanFromString(planData)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+
+	v.log.Infow("wrote plan", "chapters", len(plan))
+
+	return plan, true
+}
+
+func (v *Viter) critiquePlan(plan Plan) (*Critique, bool) {
+	v.log.Infow("critiquing plan")
+
+	messages := make([]llms.MessageContent, 2)
+	messages[0] = llms.MessageContent{
+		Role: llms.ChatMessageTypeSystem,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.pp.CritiquePlanPrompt()),
+		},
+	}
+	messages[1] = llms.MessageContent{
+		Role: llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.book.GetMeta().String()),
+			llms.TextPart(plan.String()),
+		},
+	}
+
+	critData, ok := v.tg.GenerateText(messages)
+	if !ok {
+		return nil, false
+	}
+
+	crit, err := CritiqueFromString(critData)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+
+	v.log.Infow("critiqued plan", "score", crit.GetScore())
+
+	return crit, true
+}
+
+func (v *Viter) updatePlan(prevPlan Plan, crit *Critique) (Plan, bool) {
+	v.log.Infow("updating plan")
+
+	messages := make([]llms.MessageContent, 2)
+	messages[0] = llms.MessageContent{
+		Role: llms.ChatMessageTypeSystem,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.pp.WritePlanPrompt(0)),
+		},
+	}
+	messages[1] = llms.MessageContent{
+		Role: llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.book.GetMeta().String()),
+			llms.TextPart(prevPlan.String()),
+			llms.TextPart(crit.GetImprovements()),
+			llms.TextPart(v.pp.UpdatePlanPrompt()),
+		},
+	}
+
+	planData, ok := v.tg.GenerateText(messages)
+	if !ok {
+		return nil, false
+	}
+
+	plan, err := PlanFromString(planData)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+
+	v.log.Infow("updated plan", "chapters", len(plan))
+
+	return plan, true
 }

@@ -1,6 +1,7 @@
 package viter_test
 
 import (
+	"strconv"
 	"testing"
 
 	"viter/internal/neural"
@@ -16,6 +17,9 @@ type mockPromptProvider struct {
 	writeMetaPrompt    string
 	critiqueMetaPrompt string
 	updateMetaPrompt   string
+	writePlanPrompt    string
+	critiquePlanPrompt string
+	updatePlanPrompt   string
 }
 
 func (m *mockPromptProvider) WriteMetaPrompt() string {
@@ -28,6 +32,18 @@ func (m *mockPromptProvider) CritiqueMetaPrompt() string {
 
 func (m *mockPromptProvider) UpdateMetaPrompt() string {
 	return m.updateMetaPrompt
+}
+
+func (m *mockPromptProvider) WritePlanPrompt(chapterCount int) string {
+	return m.writePlanPrompt
+}
+
+func (m *mockPromptProvider) CritiquePlanPrompt() string {
+	return m.critiquePlanPrompt
+}
+
+func (m *mockPromptProvider) UpdatePlanPrompt() string {
+	return m.updatePlanPrompt
 }
 
 type mockTextGenerator struct {
@@ -69,6 +85,9 @@ func createTestPromptProvider() *mockPromptProvider {
 		writeMetaPrompt:    "Write meta prompt",
 		critiqueMetaPrompt: "Critique meta prompt",
 		updateMetaPrompt:   "Update meta prompt",
+		writePlanPrompt:    "Write plan prompt",
+		critiquePlanPrompt: "Critique plan prompt",
+		updatePlanPrompt:   "Update plan prompt",
 	}
 }
 
@@ -115,7 +134,7 @@ Needs more world building
 Shows promise but needs work
 
 ## Score
-` + string(rune(score+'0'))
+` + strconv.Itoa(score)
 }
 
 func TestNewViter(t *testing.T) {
@@ -703,4 +722,65 @@ func TestViter_NewViter_NilDependencies(t *testing.T) {
 	v3, ok3 := viter.NewViter(cfg, nil, nil)
 	require.True(t, ok3)
 	require.NotNil(t, v3)
+}
+
+func createValidPlanResponse() string {
+	return `## 1. Chapter 1: The Beginning
+This is the first chapter where everything starts.
+
+## 2. Chapter 2: The Journey
+The adventure begins and characters face challenges.
+
+## 3. Chapter 3: The End
+Everything comes to a conclusion.`
+}
+
+func TestViter_UpdatePlan_Success(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidPlanResponse(),       // For UpdatePlan - write plan
+			createValidCritiqueResponse(85), // For UpdatePlan - critique plan
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	// Create book directory and write meta file with filled metadata
+	err := fs.MkdirAll(path, 0755)
+	require.NoError(t, err)
+
+	metaContent := createValidMetaResponse()
+	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
+	require.NoError(t, err)
+
+	// Load the book with filled metadata
+	require.True(t, v.LoadBook(fs, path))
+
+	// Now test updating plan
+	result := v.UpdatePlan(3, 75)
+
+	require.True(t, result)
+	require.Equal(t, 2, tg.callCount) // Should have called GenerateText 2 times
+}
+
+func TestViter_UpdatePlan_NoBook(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	result := v.UpdatePlan(3, 75)
+
+	require.False(t, result)
+	require.Equal(t, 0, tg.callCount)
 }
