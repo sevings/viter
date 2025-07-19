@@ -188,8 +188,8 @@ func TestBookSave(t *testing.T) {
 
 	// Set plan
 	plan := viter.Plan{
-		viter.NewChapter("Chapter 1: The Resistance", "Alex joins the underground"),
-		viter.NewChapter("Chapter 2: The Mission", "The first strike against the system"),
+		viter.NewChapter(1, "Chapter 1: The Resistance", "Alex joins the underground"),
+		viter.NewChapter(2, "Chapter 2: The Mission", "The first strike against the system"),
 	}
 
 	err = book.SetPlan(plan)
@@ -229,14 +229,14 @@ func TestSaveChapter(t *testing.T) {
 
 	// Set up a plan first
 	plan := viter.Plan{
-		viter.NewChapter("Chapter 1", "First chapter"),
-		viter.NewChapter("Chapter 2", "Second chapter"),
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Save a chapter
-	chapter := viter.NewChapter("Chapter 1: The Beginning", "It was a dark and stormy night...")
+	chapter := viter.NewChapter(1, "Chapter 1: The Beginning", "It was a dark and stormy night...")
 	err = book.SaveChapter(0, chapter)
 	require.NoError(t, err)
 
@@ -249,7 +249,7 @@ func TestSaveChapter(t *testing.T) {
 	// Verify content
 	content, err := afero.ReadFile(fs, chapterPath)
 	require.NoError(t, err)
-	require.Contains(t, string(content), "## Chapter 1: The Beginning")
+	require.Contains(t, string(content), "## 1. Chapter 1: The Beginning")
 	require.Contains(t, string(content), "It was a dark and stormy night...")
 }
 
@@ -262,13 +262,13 @@ func TestSaveChapterInvalidIndex(t *testing.T) {
 
 	// Set up a plan with 2 chapters
 	plan := viter.Plan{
-		viter.NewChapter("Chapter 1", "First chapter"),
-		viter.NewChapter("Chapter 2", "Second chapter"),
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
-	chapter := viter.NewChapter("Invalid Chapter", "This shouldn't work")
+	chapter := viter.NewChapter(0, "Invalid Chapter", "This shouldn't work")
 
 	// Test negative index
 	err = book.SaveChapter(-1, chapter)
@@ -290,8 +290,8 @@ func TestGetPlanChapter(t *testing.T) {
 
 	// Set up a plan
 	plan := viter.Plan{
-		viter.NewChapter("Chapter 1", "First chapter content"),
-		viter.NewChapter("Chapter 2", "Second chapter content"),
+		viter.NewChapter(1, "Chapter 1", "First chapter content"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter content"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
@@ -453,10 +453,10 @@ func TestChapterFromStringNoTitle(t *testing.T) {
 }
 
 func TestChapterString(t *testing.T) {
-	chapter := viter.NewChapter("Chapter 5: The Revelation", "Everything became clear in that moment. The pieces of the puzzle finally fit together.")
+	chapter := viter.NewChapter(5, "Chapter 5: The Revelation", "Everything became clear in that moment. The pieces of the puzzle finally fit together.")
 
 	result := chapter.String()
-	require.Equal(t, "## Chapter 5: The Revelation\nEverything became clear in that moment. The pieces of the puzzle finally fit together.", result)
+	require.Equal(t, "## 5. Chapter 5: The Revelation\nEverything became clear in that moment. The pieces of the puzzle finally fit together.", result)
 }
 
 func TestPlanFromString(t *testing.T) {
@@ -491,12 +491,12 @@ func TestPlanFromStringEmpty(t *testing.T) {
 
 func TestPlanString(t *testing.T) {
 	plan := viter.Plan{
-		viter.NewChapter("Chapter 1", "First chapter"),
-		viter.NewChapter("Chapter 2", "Second chapter"),
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 
 	result := plan.String()
-	expected := "## Chapter 1\nFirst chapter\n\n## Chapter 2\nSecond chapter"
+	expected := "## 1. Chapter 1\nFirst chapter\n\n## 2. Chapter 2\nSecond chapter"
 	require.Equal(t, expected, result)
 }
 
@@ -532,7 +532,7 @@ func TestRoundTripMetadata(t *testing.T) {
 }
 
 func TestRoundTripChapter(t *testing.T) {
-	original := viter.NewChapter("Chapter 42: The Answer", "The answer to life, the universe, and everything is 42.")
+	original := viter.NewChapter(42, "Chapter 42: The Answer", "The answer to life, the universe, and everything is 42.")
 
 	// Convert to string and back
 	str := original.String()
@@ -542,13 +542,14 @@ func TestRoundTripChapter(t *testing.T) {
 	// Verify all data is preserved
 	require.Equal(t, original.GetTitle(), parsed.GetTitle())
 	require.Equal(t, original.GetContent(), parsed.GetContent())
+	require.Equal(t, original.GetNumber(), parsed.GetNumber())
 }
 
 func TestRoundTripPlan(t *testing.T) {
 	original := viter.Plan{
-		viter.NewChapter("Prologue", "The story begins"),
-		viter.NewChapter("Chapter 1", "The adventure starts"),
-		viter.NewChapter("Epilogue", "The story ends"),
+		viter.NewChapter(0, "Prologue", "The story begins"),
+		viter.NewChapter(1, "Chapter 1", "The adventure starts"),
+		viter.NewChapter(0, "Epilogue", "The story ends"),
 	}
 
 	// Convert to string and back
@@ -596,9 +597,9 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 
 	// Set up a plan
 	plan := viter.Plan{
-		viter.NewChapter("Chapter 1: Arrival", "Dr. Carter arrives in the small town"),
-		viter.NewChapter("Chapter 2: Strange Occurrences", "Mysterious events begin to unfold"),
-		viter.NewChapter("Chapter 3: The Truth", "The dark history is revealed"),
+		viter.NewChapter(1, "Chapter 1: Arrival", "Dr. Carter arrives in the small town"),
+		viter.NewChapter(2, "Chapter 2: Strange Occurrences", "Mysterious events begin to unfold"),
+		viter.NewChapter(3, "Chapter 3: The Truth", "The dark history is revealed"),
 	}
 
 	err = book.SetPlan(plan)
@@ -628,7 +629,7 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save individual chapters
-	fullChapter1 := viter.NewChapter("Chapter 1: Arrival - The Beginning", "Dr. Emma Carter stepped off the bus into the dusty main street of Millbrook. The town seemed ordinary enough, but something in the air made her skin crawl.")
+	fullChapter1 := viter.NewChapter(1, "Chapter 1: Arrival - The Beginning", "Dr. Emma Carter stepped off the bus into the dusty main street of Millbrook. The town seemed ordinary enough, but something in the air made her skin crawl.")
 	err = book.SaveChapter(0, fullChapter1)
 	require.NoError(t, err)
 
@@ -766,4 +767,318 @@ func TestRoundTripCritiques(t *testing.T) {
 
 	require.Equal(t, metaCrit, loadedBook.GetMetaCrit())
 	require.Equal(t, planCrit, loadedBook.GetPlanCrit())
+}
+
+func TestChapterGetNumber(t *testing.T) {
+	chapter := viter.NewChapter(42, "Test Chapter", "Test content")
+	require.Equal(t, 42, chapter.GetNumber())
+
+	// Test chapter with number 0
+	chapterZero := viter.NewChapter(0, "Prologue", "Beginning")
+	require.Equal(t, 0, chapterZero.GetNumber())
+}
+
+func TestChapterFromStringWithNumber(t *testing.T) {
+	// Test parsing chapter with number
+	chapterStr := `## 5. The Final Confrontation
+The hero faces the ultimate challenge.`
+
+	chapter, err := viter.ChapterFromString(chapterStr)
+	require.NoError(t, err)
+	require.Equal(t, 5, chapter.GetNumber())
+	require.Equal(t, "The Final Confrontation", chapter.GetTitle())
+	require.Equal(t, "The hero faces the ultimate challenge.", chapter.GetContent())
+}
+
+func TestChapterFromStringWithoutNumber(t *testing.T) {
+	// Test parsing chapter without number format
+	chapterStr := `## Epilogue
+The story concludes.`
+
+	chapter, err := viter.ChapterFromString(chapterStr)
+	require.NoError(t, err)
+	require.Equal(t, 0, chapter.GetNumber())
+	require.Equal(t, "Epilogue", chapter.GetTitle())
+	require.Equal(t, "The story concludes.", chapter.GetContent())
+}
+
+func TestChapterFromStringInvalidNumber(t *testing.T) {
+	// Test parsing chapter with invalid number format
+	chapterStr := `## abc. Invalid Number
+This should not parse the number.`
+
+	chapter, err := viter.ChapterFromString(chapterStr)
+	require.NoError(t, err)
+	require.Equal(t, 0, chapter.GetNumber())
+	require.Equal(t, "abc. Invalid Number", chapter.GetTitle())
+	require.Equal(t, "This should not parse the number.", chapter.GetContent())
+}
+
+func TestPlanMerge(t *testing.T) {
+	// Create original plan
+	original := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "Original content 1"),
+		viter.NewChapter(2, "Chapter 2", "Original content 2"),
+		viter.NewChapter(0, "Prologue", "Original prologue"),
+	}
+
+	// Create new plan with overlapping and new chapters
+	updates := viter.Plan{
+		viter.NewChapter(2, "Chapter 2 Updated", "Updated content 2"),
+		viter.NewChapter(3, "Chapter 3", "New content 3"),
+		viter.NewChapter(0, "Epilogue", "New epilogue"),
+	}
+
+	// Test merge through SetPlan
+	fs := afero.NewMemMapFs()
+	book, err := viter.CreateBook(fs, "/test")
+	require.NoError(t, err)
+
+	// Set original plan
+	err = book.SetPlan(original)
+	require.NoError(t, err)
+
+	// Merge updates
+	err = book.SetPlan(updates)
+	require.NoError(t, err)
+
+	// Verify merged result
+	result := book.GetPlan()
+
+	// Should have 5 chapters: original 1, updated 2, original prologue, new 3, new epilogue
+	require.Len(t, result, 5)
+
+	// Find chapters by number for verification
+	chaptersByNumber := make(map[int]viter.Chapter)
+	var zeroChapters []viter.Chapter
+
+	for _, ch := range result {
+		if ch.GetNumber() == 0 {
+			zeroChapters = append(zeroChapters, ch)
+		} else {
+			chaptersByNumber[ch.GetNumber()] = ch
+		}
+	}
+
+	// Verify numbered chapters
+	require.Equal(t, "Chapter 1", chaptersByNumber[1].GetTitle())
+	require.Equal(t, "Original content 1", chaptersByNumber[1].GetContent())
+
+	require.Equal(t, "Chapter 2 Updated", chaptersByNumber[2].GetTitle())
+	require.Equal(t, "Updated content 2", chaptersByNumber[2].GetContent())
+
+	require.Equal(t, "Chapter 3", chaptersByNumber[3].GetTitle())
+	require.Equal(t, "New content 3", chaptersByNumber[3].GetContent())
+
+	// Verify chapters with number 0 (should have both prologue and epilogue)
+	require.Len(t, zeroChapters, 2)
+	titles := make([]string, len(zeroChapters))
+	for i, ch := range zeroChapters {
+		titles[i] = ch.GetTitle()
+	}
+	require.Contains(t, titles, "Prologue")
+	require.Contains(t, titles, "Epilogue")
+}
+
+func TestPlanMergeEmpty(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	book, err := viter.CreateBook(fs, "/test")
+	require.NoError(t, err)
+
+	// Set original plan
+	original := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "Content 1"),
+	}
+	err = book.SetPlan(original)
+	require.NoError(t, err)
+
+	// Merge with empty plan
+	empty := viter.Plan{}
+	err = book.SetPlan(empty)
+	require.NoError(t, err)
+
+	// Should still have original plan
+	result := book.GetPlan()
+	require.Len(t, result, 1)
+	require.Equal(t, "Chapter 1", result[0].GetTitle())
+}
+
+func TestPlanFromStringWithNumbers(t *testing.T) {
+	// Test plan string with numbered chapters
+	planStr := `## 1. Chapter 1: The Beginning
+Our hero starts their journey
+
+## 2. Chapter 2: The Challenge
+The first major obstacle appears
+
+## 3. Chapter 3: The Resolution
+Everything comes together in the end`
+
+	plan, err := viter.PlanFromString(planStr)
+	require.NoError(t, err)
+	require.Len(t, plan, 3)
+
+	// Verify numbers and titles are parsed correctly
+	require.Equal(t, 1, plan[0].GetNumber())
+	require.Equal(t, "Chapter 1: The Beginning", plan[0].GetTitle())
+	require.Equal(t, "Our hero starts their journey", plan[0].GetContent())
+
+	require.Equal(t, 2, plan[1].GetNumber())
+	require.Equal(t, "Chapter 2: The Challenge", plan[1].GetTitle())
+	require.Equal(t, "The first major obstacle appears", plan[1].GetContent())
+
+	require.Equal(t, 3, plan[2].GetNumber())
+	require.Equal(t, "Chapter 3: The Resolution", plan[2].GetTitle())
+	require.Equal(t, "Everything comes together in the end", plan[2].GetContent())
+}
+
+func TestPlanFromStringMixedNumbers(t *testing.T) {
+	// Test plan string with mixed numbered and non-numbered chapters
+	planStr := `## Prologue
+The story begins
+
+## 1. Chapter 1: The Discovery
+The first chapter
+
+## Interlude
+A break in the action
+
+## 2. Chapter 2: The Conflict
+The second chapter`
+
+	plan, err := viter.PlanFromString(planStr)
+	require.NoError(t, err)
+	require.Len(t, plan, 4)
+
+	// Verify mixed numbering
+	require.Equal(t, 0, plan[0].GetNumber())
+	require.Equal(t, "Prologue", plan[0].GetTitle())
+
+	require.Equal(t, 1, plan[1].GetNumber())
+	require.Equal(t, "Chapter 1: The Discovery", plan[1].GetTitle())
+
+	require.Equal(t, 0, plan[2].GetNumber())
+	require.Equal(t, "Interlude", plan[2].GetTitle())
+
+	require.Equal(t, 2, plan[3].GetNumber())
+	require.Equal(t, "Chapter 2: The Conflict", plan[3].GetTitle())
+}
+
+func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	book, err := viter.CreateBook(fs, "/test")
+	require.NoError(t, err)
+
+	// Create original plan with numbered chapters
+	original := viter.Plan{
+		viter.NewChapter(1, "Chapter 1: The Start", "Beginning of the story"),
+		viter.NewChapter(2, "Chapter 2: The Journey", "Middle of the story"),
+		viter.NewChapter(0, "Prologue", "Before it all began"),
+	}
+
+	err = book.SetPlan(original)
+	require.NoError(t, err)
+
+	// Convert plan to string and back
+	planStr := original.String()
+	parsedPlan, err := viter.PlanFromString(planStr)
+	require.NoError(t, err)
+
+	// Verify round-trip preserves numbers
+	require.Len(t, parsedPlan, 3)
+
+	// Find chapters by number
+	chaptersByNumber := make(map[int]viter.Chapter)
+	var zeroChapters []viter.Chapter
+
+	for _, ch := range parsedPlan {
+		if ch.GetNumber() == 0 {
+			zeroChapters = append(zeroChapters, ch)
+		} else {
+			chaptersByNumber[ch.GetNumber()] = ch
+		}
+	}
+
+	require.Equal(t, 1, chaptersByNumber[1].GetNumber())
+	require.Equal(t, "Chapter 1: The Start", chaptersByNumber[1].GetTitle())
+	require.Equal(t, "Beginning of the story", chaptersByNumber[1].GetContent())
+
+	require.Equal(t, 2, chaptersByNumber[2].GetNumber())
+	require.Equal(t, "Chapter 2: The Journey", chaptersByNumber[2].GetTitle())
+	require.Equal(t, "Middle of the story", chaptersByNumber[2].GetContent())
+
+	require.Len(t, zeroChapters, 1)
+	require.Equal(t, "Prologue", zeroChapters[0].GetTitle())
+	require.Equal(t, "Before it all began", zeroChapters[0].GetContent())
+
+	// Now test merge functionality with updates
+	updates := viter.Plan{
+		viter.NewChapter(2, "Chapter 2: The Updated Journey", "Updated middle story"),
+		viter.NewChapter(3, "Chapter 3: The End", "End of the story"),
+		viter.NewChapter(0, "Epilogue", "After it all ended"),
+	}
+
+	// Merge updates
+	err = book.SetPlan(updates)
+	require.NoError(t, err)
+
+	// Verify merged result maintains all chapters
+	merged := book.GetPlan()
+	require.Len(t, merged, 5) // 1, updated 2, prologue, new 3, epilogue
+
+	// Reset maps for merged plan
+	chaptersByNumber = make(map[int]viter.Chapter)
+	zeroChapters = []viter.Chapter{}
+
+	for _, ch := range merged {
+		if ch.GetNumber() == 0 {
+			zeroChapters = append(zeroChapters, ch)
+		} else {
+			chaptersByNumber[ch.GetNumber()] = ch
+		}
+	}
+
+	// Verify original chapter 1 is preserved
+	require.Equal(t, "Chapter 1: The Start", chaptersByNumber[1].GetTitle())
+	require.Equal(t, "Beginning of the story", chaptersByNumber[1].GetContent())
+
+	// Verify chapter 2 was updated
+	require.Equal(t, "Chapter 2: The Updated Journey", chaptersByNumber[2].GetTitle())
+	require.Equal(t, "Updated middle story", chaptersByNumber[2].GetContent())
+
+	// Verify new chapter 3 was added
+	require.Equal(t, "Chapter 3: The End", chaptersByNumber[3].GetTitle())
+	require.Equal(t, "End of the story", chaptersByNumber[3].GetContent())
+
+	// Verify both zero-numbered chapters exist
+	require.Len(t, zeroChapters, 2)
+	titles := make([]string, len(zeroChapters))
+	for i, ch := range zeroChapters {
+		titles[i] = ch.GetTitle()
+	}
+	require.Contains(t, titles, "Prologue")
+	require.Contains(t, titles, "Epilogue")
+
+	// Final round-trip test - convert merged plan to string and back
+	finalStr := merged.String()
+	finalParsed, err := viter.PlanFromString(finalStr)
+	require.NoError(t, err)
+	require.Len(t, finalParsed, 5)
+
+	// Verify the final parsed version has all the right data
+	finalByNumber := make(map[int]viter.Chapter)
+	var finalZeroChapters []viter.Chapter
+
+	for _, ch := range finalParsed {
+		if ch.GetNumber() == 0 {
+			finalZeroChapters = append(finalZeroChapters, ch)
+		} else {
+			finalByNumber[ch.GetNumber()] = ch
+		}
+	}
+
+	require.Equal(t, "Chapter 1: The Start", finalByNumber[1].GetTitle())
+	require.Equal(t, "Chapter 2: The Updated Journey", finalByNumber[2].GetTitle())
+	require.Equal(t, "Chapter 3: The End", finalByNumber[3].GetTitle())
+	require.Len(t, finalZeroChapters, 2)
 }

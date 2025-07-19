@@ -190,7 +190,7 @@ func (b *Book) GetMeta() *BookMeta {
 
 // SetPlan sets the book's plan and saves it to the filesystem.
 func (b *Book) SetPlan(plan Plan) error {
-	b.plan = plan
+	b.plan = b.plan.merge(plan)
 	return b.savePlan()
 }
 
@@ -572,18 +572,19 @@ func (bm *BookMeta) IsFilled() bool {
 }
 
 type Chapter struct {
+	number  int
 	title   string
 	content string
 }
 
-func NewChapter(title, content string) Chapter {
-	return Chapter{title: title, content: content}
+func NewChapter(number int, title, content string) Chapter {
+	return Chapter{number: number, title: title, content: content}
 }
 
 // ChapterFromString creates a new Chapter from a string.
 // Format:
 // ```
-// ## {title}
+// ## {number}. {title}
 // {content}
 // ```
 func ChapterFromString(s string) (Chapter, error) {
@@ -610,7 +611,25 @@ func ChapterFromString(s string) (Chapter, error) {
 		return Chapter{}, ErrNoTitleFound
 	}
 
-	title := strings.TrimSpace(lines[titleLine][3:]) // Remove "## "
+	titleText := strings.TrimSpace(lines[titleLine][3:]) // Remove "## "
+
+	// Parse chapter number from title if it follows the format "number. title"
+	var number int
+	var title string
+
+	if dotIndex := strings.Index(titleText, ". "); dotIndex > 0 {
+		// Try to parse the number part
+		if num, err := strconv.Atoi(titleText[:dotIndex]); err == nil {
+			number = num
+			title = titleText[dotIndex+2:] // Skip ". "
+		} else {
+			// If parsing fails, use the whole string as title
+			title = titleText
+		}
+	} else {
+		// No number format found, use whole string as title
+		title = titleText
+	}
 
 	// Content is everything after the title line
 	var content strings.Builder
@@ -622,6 +641,7 @@ func ChapterFromString(s string) (Chapter, error) {
 	}
 
 	return Chapter{
+		number:  number,
 		title:   title,
 		content: strings.TrimSpace(content.String()),
 	}, nil
@@ -630,6 +650,10 @@ func ChapterFromString(s string) (Chapter, error) {
 func (c *Chapter) String() string {
 	var sb strings.Builder
 	sb.WriteString("## ")
+	if c.number > 0 {
+		sb.WriteString(strconv.Itoa(c.number))
+		sb.WriteString(". ")
+	}
 	sb.WriteString(c.title)
 	sb.WriteString("\n")
 	sb.WriteString(c.content)
@@ -644,12 +668,16 @@ func (c Chapter) GetContent() string {
 	return c.content
 }
 
+func (c Chapter) GetNumber() int {
+	return c.number
+}
+
 type Plan []Chapter
 
 // PlanFromString creates a new Plan from a string.
 // Format:
 // ```
-// ## {title}
+// ## {number}. {title}
 // {content}
 // ```
 func PlanFromString(s string) (Plan, error) {
@@ -683,6 +711,43 @@ func (p Plan) String() string {
 		sb.WriteString(chapter.String())
 	}
 	return sb.String()
+}
+
+// merge combines this plan with another, with the other plan taking precedence
+// for chapters that exist in both plans (based on chapter number).
+// Chapters with number 0 are always appended.
+func (p Plan) merge(other Plan) Plan {
+	if len(other) == 0 {
+		return p
+	}
+
+	// Create a map of existing chapters by number for efficient lookup
+	existing := make(map[int]int) // number -> index
+	for i, chapter := range p {
+		if chapter.number > 0 {
+			existing[chapter.number] = i
+		}
+	}
+
+	result := make(Plan, len(p))
+	copy(result, p)
+
+	// Process chapters from other plan
+	for _, otherChapter := range other {
+		if otherChapter.number == 0 {
+			// Chapters with number 0 are always appended
+			result = append(result, otherChapter)
+		} else if existingIndex, exists := existing[otherChapter.number]; exists {
+			// Replace existing chapter with same number
+			result[existingIndex] = otherChapter
+		} else {
+			// Add new chapter and update the map
+			result = append(result, otherChapter)
+			existing[otherChapter.number] = len(result) - 1
+		}
+	}
+
+	return result
 }
 
 type Critique struct {
