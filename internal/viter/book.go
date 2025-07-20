@@ -22,9 +22,11 @@ type Book struct {
 	path string
 	meta *BookMeta
 	plan Plan
+	chps []*Chapter
 
 	metaCrit *Critique
 	planCrit *Critique
+	chpsCrit []*Critique
 }
 
 // CreateBook creates a new book with the given filesystem and path.
@@ -50,30 +52,16 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 		return nil, ErrNoMetaFile
 	}
 
-	content, err := afero.ReadFile(fs, metaPath)
-	if err != nil {
-		return nil, err
-	}
-	meta, err := MetaFromString(string(content))
-	if err != nil {
-		return nil, err
-	}
-	b.meta = meta
-
-	// Load plan if it exists
-	planPath := filepath.Join(path, "plan.md")
-	if exists, err := afero.Exists(fs, planPath); err != nil {
-		return nil, err
-	} else if exists {
-		content, err := afero.ReadFile(fs, planPath)
+	{
+		content, err := afero.ReadFile(fs, metaPath)
 		if err != nil {
 			return nil, err
 		}
-		plan, err := PlanFromString(string(content))
+		meta, err := MetaFromString(string(content))
 		if err != nil {
 			return nil, err
 		}
-		b.plan = plan
+		b.meta = meta
 	}
 
 	// Load meta critique if it exists
@@ -92,6 +80,22 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 		b.metaCrit = crit
 	}
 
+	// Load plan if it exists
+	planPath := filepath.Join(path, "plan.md")
+	if exists, err := afero.Exists(fs, planPath); err != nil {
+		return nil, err
+	} else if exists {
+		content, err := afero.ReadFile(fs, planPath)
+		if err != nil {
+			return nil, err
+		}
+		plan, err := PlanFromString(string(content))
+		if err != nil {
+			return nil, err
+		}
+		b.plan = plan
+	}
+
 	// Load plan critique if it exists
 	planCritPath := filepath.Join(path, "plan_critique.md")
 	if exists, err := afero.Exists(fs, planCritPath); err != nil {
@@ -106,6 +110,47 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 			return nil, err
 		}
 		b.planCrit = crit
+	}
+
+	if b.plan.Count() == 0 {
+		return b, nil
+	}
+
+	b.chps = make([]*Chapter, b.plan.Count())
+	b.chpsCrit = make([]*Critique, b.plan.Count())
+
+	for i := 1; i <= b.plan.Count(); i++ {
+		chpPath := filepath.Join(path, fmt.Sprintf("chapter_%d.md", i))
+		if exists, err := afero.Exists(fs, chpPath); err != nil {
+			return nil, err
+		} else if exists {
+			content, err := afero.ReadFile(fs, chpPath)
+			if err != nil {
+				return nil, err
+			}
+			chp, err := ChapterFromString(string(content))
+			if err != nil {
+				continue
+			}
+			b.chps[i-1] = chp
+		}
+	}
+
+	for i := 1; i <= b.plan.Count(); i++ {
+		critPath := filepath.Join(path, fmt.Sprintf("chapter_%d_critique.md", i))
+		if exists, err := afero.Exists(fs, critPath); err != nil {
+			return nil, err
+		} else if exists {
+			content, err := afero.ReadFile(fs, critPath)
+			if err != nil {
+				return nil, err
+			}
+			crit, err := CritiqueFromString(string(content))
+			if err != nil {
+				continue
+			}
+			b.chpsCrit[i-1] = crit
+		}
 	}
 
 	return b, nil
@@ -198,23 +243,65 @@ func (b *Book) GetPlan() Plan {
 	return b.plan
 }
 
-func (b *Book) GetPlanChapter(i int) (Chapter, error) {
-	if i < 0 || i >= len(b.plan) {
-		return Chapter{}, ErrInvalidChapterIndex
+func (b *Book) GetPlanChapter(i int) (*Chapter, error) {
+	if i <= 0 || i > len(b.plan) {
+		return &Chapter{}, ErrInvalidChapterIndex
 	}
-	return b.plan[i], nil
+	return b.plan[i-1], nil
 }
 
-// SaveChapter saves the given chapter to the filesystem.
+func (b *Book) GetChapter(i int) (*Chapter, error) {
+	if i <= 0 || i > len(b.plan) {
+		return &Chapter{}, ErrInvalidChapterIndex
+	}
+
+	for i > len(b.chps) {
+		b.chps = append(b.chps, &Chapter{})
+	}
+	return b.chps[i-1], nil
+}
+
+// SetChapter saves the given chapter to the filesystem.
 // It creates a new file 'chapter_<index>.md' if it doesn't exist, or overwrites it if it does.
-func (b *Book) SaveChapter(i int, chapter Chapter) error {
-	if i < 0 || i >= len(b.plan) {
+func (b *Book) SetChapter(i int, chapter *Chapter) error {
+	if i <= 0 || i > len(b.plan) {
 		return ErrInvalidChapterIndex
 	}
+
+	for i > len(b.chps) {
+		b.chps = append(b.chps, &Chapter{})
+	}
+	b.chps[i-1] = chapter
 
 	filename := fmt.Sprintf("chapter_%d.md", i)
 	chapterPath := filepath.Join(b.path, filename)
 	return afero.WriteFile(b.fs, chapterPath, []byte(chapter.String()), 0644)
+}
+
+func (b *Book) GetChapterCritique(i int) (*Critique, error) {
+	if i <= 0 || i > len(b.plan) {
+		return nil, ErrInvalidChapterIndex
+	}
+
+	for i > len(b.chpsCrit) {
+		b.chpsCrit = append(b.chpsCrit, &Critique{})
+	}
+	return b.chpsCrit[i-1], nil
+}
+
+func (b *Book) SetChapterCritique(i int, crit *Critique) error {
+	if i <= 0 || i > len(b.plan) {
+		return ErrInvalidChapterIndex
+	}
+
+	for i > len(b.chpsCrit) {
+		b.chpsCrit = append(b.chpsCrit, &Critique{})
+	}
+	b.chpsCrit[i-1] = crit
+
+	filename := fmt.Sprintf("chapter_%d_critique.md", i)
+	critPath := filepath.Join(b.path, filename)
+	return afero.WriteFile(b.fs, critPath, []byte(crit.String()), 0644)
 }
 
 func (b *Book) GetFs() afero.Fs {
@@ -577,8 +664,8 @@ type Chapter struct {
 	content string
 }
 
-func NewChapter(number int, title, content string) Chapter {
-	return Chapter{number: number, title: title, content: content}
+func NewChapter(number int, title, content string) *Chapter {
+	return &Chapter{number: number, title: title, content: content}
 }
 
 // ChapterFromString creates a new Chapter from a string.
@@ -587,15 +674,15 @@ func NewChapter(number int, title, content string) Chapter {
 // ## {number}. {title}
 // {content}
 // ```
-func ChapterFromString(s string) (Chapter, error) {
+func ChapterFromString(s string) (*Chapter, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return Chapter{}, ErrEmptyChapterString
+		return &Chapter{}, ErrEmptyChapterString
 	}
 
 	lines := strings.Split(s, "\n")
 	if len(lines) < 1 {
-		return Chapter{}, ErrEmptyChapterString
+		return &Chapter{}, ErrEmptyChapterString
 	}
 
 	// Find first line starting with ##
@@ -608,7 +695,7 @@ func ChapterFromString(s string) (Chapter, error) {
 	}
 
 	if titleLine == -1 {
-		return Chapter{}, ErrNoTitleFound
+		return &Chapter{}, ErrNoTitleFound
 	}
 
 	titleText := strings.TrimSpace(lines[titleLine][3:]) // Remove "## "
@@ -640,7 +727,7 @@ func ChapterFromString(s string) (Chapter, error) {
 		content.WriteString(lines[i])
 	}
 
-	return Chapter{
+	return &Chapter{
 		number:  number,
 		title:   title,
 		content: strings.TrimSpace(content.String()),
@@ -660,19 +747,31 @@ func (c *Chapter) String() string {
 	return sb.String()
 }
 
-func (c Chapter) GetTitle() string {
+func (c *Chapter) GetTitle() string {
 	return c.title
 }
 
-func (c Chapter) GetContent() string {
+func (c *Chapter) GetContent() string {
 	return c.content
 }
 
-func (c Chapter) GetNumber() int {
+func (c *Chapter) GetNumber() int {
 	return c.number
 }
 
-type Plan []Chapter
+func (c *Chapter) SetNumber(number int) {
+	c.number = number
+}
+
+func (c *Chapter) SetTitle(title string) {
+	c.title = title
+}
+
+func (c *Chapter) SetContent(content string) {
+	c.content = content
+}
+
+type Plan []*Chapter
 
 // PlanFromString creates a new Plan from a string.
 // Format:
@@ -748,6 +847,10 @@ func (p Plan) merge(other Plan) Plan {
 	}
 
 	return result
+}
+
+func (p Plan) Count() int {
+	return len(p)
 }
 
 type Critique struct {

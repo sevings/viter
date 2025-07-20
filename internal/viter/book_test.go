@@ -135,7 +135,7 @@ The chapter plan provides a good structure for the story arc.
 	plan := book.GetPlan()
 	require.Len(t, plan, 2)
 
-	chapter1, err := book.GetPlanChapter(0)
+	chapter1, err := book.GetPlanChapter(1)
 	require.NoError(t, err)
 	require.Equal(t, "Chapter 1: The Awakening", chapter1.GetTitle())
 	require.Equal(t, "Aria discovers her magical abilities when her village is attacked", chapter1.GetContent())
@@ -237,11 +237,11 @@ func TestSaveChapter(t *testing.T) {
 
 	// Save a chapter
 	chapter := viter.NewChapter(1, "Chapter 1: The Beginning", "It was a dark and stormy night...")
-	err = book.SaveChapter(0, chapter)
+	err = book.SetChapter(1, chapter)
 	require.NoError(t, err)
 
 	// Verify file was created
-	chapterPath := filepath.Join(path, "chapter_0.md")
+	chapterPath := filepath.Join(path, "chapter_1.md")
 	exists, err := afero.Exists(fs, chapterPath)
 	require.NoError(t, err)
 	require.True(t, exists)
@@ -271,12 +271,12 @@ func TestSaveChapterInvalidIndex(t *testing.T) {
 	chapter := viter.NewChapter(0, "Invalid Chapter", "This shouldn't work")
 
 	// Test negative index
-	err = book.SaveChapter(-1, chapter)
+	err = book.SetChapter(-1, chapter)
 	require.Error(t, err)
 	require.Equal(t, viter.ErrInvalidChapterIndex, err)
 
 	// Test index too high
-	err = book.SaveChapter(2, chapter)
+	err = book.SetChapter(3, chapter)
 	require.Error(t, err)
 	require.Equal(t, viter.ErrInvalidChapterIndex, err)
 }
@@ -297,22 +297,22 @@ func TestGetPlanChapter(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test valid indices
-	chapter0, err := book.GetPlanChapter(0)
+	chapter0, err := book.GetPlanChapter(1)
 	require.NoError(t, err)
 	require.Equal(t, "Chapter 1", chapter0.GetTitle())
 	require.Equal(t, "First chapter content", chapter0.GetContent())
 
-	chapter1, err := book.GetPlanChapter(1)
+	chapter1, err := book.GetPlanChapter(2)
 	require.NoError(t, err)
 	require.Equal(t, "Chapter 2", chapter1.GetTitle())
 	require.Equal(t, "Second chapter content", chapter1.GetContent())
 
 	// Test invalid indices
-	_, err = book.GetPlanChapter(-1)
+	_, err = book.GetPlanChapter(0)
 	require.Error(t, err)
 	require.Equal(t, viter.ErrInvalidChapterIndex, err)
 
-	_, err = book.GetPlanChapter(2)
+	_, err = book.GetPlanChapter(3)
 	require.Error(t, err)
 	require.Equal(t, viter.ErrInvalidChapterIndex, err)
 }
@@ -630,7 +630,7 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 
 	// Save individual chapters
 	fullChapter1 := viter.NewChapter(1, "Chapter 1: Arrival - The Beginning", "Dr. Emma Carter stepped off the bus into the dusty main street of Millbrook. The town seemed ordinary enough, but something in the air made her skin crawl.")
-	err = book.SaveChapter(0, fullChapter1)
+	err = book.SetChapter(1, fullChapter1)
 	require.NoError(t, err)
 
 	// Load the book fresh
@@ -659,12 +659,12 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	require.Equal(t, "Dr. Carter arrives in the small town", loadedPlan[0].GetContent())
 
 	// Verify individual chapter file was created
-	chapterExists, err := afero.Exists(fs, filepath.Join(path, "chapter_0.md"))
+	chapterExists, err := afero.Exists(fs, filepath.Join(path, "chapter_1.md"))
 	require.NoError(t, err)
 	require.True(t, chapterExists)
 
 	// Verify chapter content
-	chapterContent, err := afero.ReadFile(fs, filepath.Join(path, "chapter_0.md"))
+	chapterContent, err := afero.ReadFile(fs, filepath.Join(path, "chapter_1.md"))
 	require.NoError(t, err)
 	require.Contains(t, string(chapterContent), "Chapter 1: Arrival - The Beginning")
 	require.Contains(t, string(chapterContent), "Dr. Emma Carter stepped off the bus")
@@ -849,8 +849,8 @@ func TestPlanMerge(t *testing.T) {
 	require.Len(t, result, 5)
 
 	// Find chapters by number for verification
-	chaptersByNumber := make(map[int]viter.Chapter)
-	var zeroChapters []viter.Chapter
+	chaptersByNumber := make(map[int]*viter.Chapter)
+	var zeroChapters []*viter.Chapter
 
 	for _, ch := range result {
 		if ch.GetNumber() == 0 {
@@ -988,8 +988,8 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 	require.Len(t, parsedPlan, 3)
 
 	// Find chapters by number
-	chaptersByNumber := make(map[int]viter.Chapter)
-	var zeroChapters []viter.Chapter
+	chaptersByNumber := make(map[int]*viter.Chapter)
+	var zeroChapters []*viter.Chapter
 
 	for _, ch := range parsedPlan {
 		if ch.GetNumber() == 0 {
@@ -1027,8 +1027,8 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 	require.Len(t, merged, 5) // 1, updated 2, prologue, new 3, epilogue
 
 	// Reset maps for merged plan
-	chaptersByNumber = make(map[int]viter.Chapter)
-	zeroChapters = []viter.Chapter{}
+	chaptersByNumber = make(map[int]*viter.Chapter)
+	zeroChapters = []*viter.Chapter{}
 
 	for _, ch := range merged {
 		if ch.GetNumber() == 0 {
@@ -1066,8 +1066,8 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 	require.Len(t, finalParsed, 5)
 
 	// Verify the final parsed version has all the right data
-	finalByNumber := make(map[int]viter.Chapter)
-	var finalZeroChapters []viter.Chapter
+	finalByNumber := make(map[int]*viter.Chapter)
+	var finalZeroChapters []*viter.Chapter
 
 	for _, ch := range finalParsed {
 		if ch.GetNumber() == 0 {
@@ -1081,4 +1081,412 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 	require.Equal(t, "Chapter 2: The Updated Journey", finalByNumber[2].GetTitle())
 	require.Equal(t, "Chapter 3: The End", finalByNumber[3].GetTitle())
 	require.Len(t, finalZeroChapters, 2)
+}
+
+func TestGetChapter(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 2 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Set some chapters
+	chapter1 := viter.NewChapter(1, "First Chapter", "This is the first chapter content")
+	chapter2 := viter.NewChapter(2, "Second Chapter", "This is the second chapter content")
+
+	err = book.SetChapter(1, chapter1)
+	require.NoError(t, err)
+	err = book.SetChapter(2, chapter2)
+	require.NoError(t, err)
+
+	// Test getting valid chapters
+	retrievedChapter1, err := book.GetChapter(1)
+	require.NoError(t, err)
+	require.Equal(t, chapter1.GetTitle(), retrievedChapter1.GetTitle())
+	require.Equal(t, chapter1.GetContent(), retrievedChapter1.GetContent())
+	require.Equal(t, chapter1.GetNumber(), retrievedChapter1.GetNumber())
+
+	retrievedChapter2, err := book.GetChapter(2)
+	require.NoError(t, err)
+	require.Equal(t, chapter2.GetTitle(), retrievedChapter2.GetTitle())
+	require.Equal(t, chapter2.GetContent(), retrievedChapter2.GetContent())
+	require.Equal(t, chapter2.GetNumber(), retrievedChapter2.GetNumber())
+
+	// Create a new book to test empty chapters
+	emptyBook, err := viter.CreateBook(fs, "/test/empty_book")
+	require.NoError(t, err)
+
+	// Set up a plan with 3 chapters but don't set any chapter content
+	emptyPlan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+		viter.NewChapter(3, "Chapter 3", "Third chapter"),
+	}
+	err = emptyBook.SetPlan(emptyPlan)
+	require.NoError(t, err)
+
+	// Test getting chapter that wasn't set (should return empty chapter)
+	emptyChapter, err := emptyBook.GetChapter(2)
+	require.NoError(t, err)
+	require.Equal(t, "", emptyChapter.GetTitle())
+	require.Equal(t, "", emptyChapter.GetContent())
+	require.Equal(t, 0, emptyChapter.GetNumber())
+}
+
+func TestGetChapterInvalidIndex(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 2 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Test negative index
+	_, err = book.GetChapter(-1)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+
+	// Test zero index
+	_, err = book.GetChapter(0)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+
+	// Test index too high
+	_, err = book.GetChapter(3)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+}
+
+func TestGetChapterCritique(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 2 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Create some critiques
+	critique1 := &viter.Critique{
+		Strengths:    "Good pacing, Strong dialogue",
+		Improvements: "Needs more description, Character development",
+		Impressions:  "Engaging, Well-written",
+		Score:        8,
+	}
+
+	critique2 := &viter.Critique{
+		Strengths:    "Excellent world-building",
+		Improvements: "Plot could be tighter",
+		Impressions:  "Creative, Immersive",
+		Score:        7,
+	}
+
+	// Set the critiques
+	err = book.SetChapterCritique(1, critique1)
+	require.NoError(t, err)
+	err = book.SetChapterCritique(2, critique2)
+	require.NoError(t, err)
+
+	// Test getting valid critiques
+	retrievedCritique1, err := book.GetChapterCritique(1)
+	require.NoError(t, err)
+	require.NotNil(t, retrievedCritique1)
+	require.Equal(t, critique1.GetStrengths(), retrievedCritique1.GetStrengths())
+	require.Equal(t, critique1.GetImprovements(), retrievedCritique1.GetImprovements())
+	require.Equal(t, critique1.GetImpressions(), retrievedCritique1.GetImpressions())
+	require.Equal(t, critique1.GetScore(), retrievedCritique1.GetScore())
+
+	retrievedCritique2, err := book.GetChapterCritique(2)
+	require.NoError(t, err)
+	require.NotNil(t, retrievedCritique2)
+	require.Equal(t, critique2.GetStrengths(), retrievedCritique2.GetStrengths())
+	require.Equal(t, critique2.GetImprovements(), retrievedCritique2.GetImprovements())
+	require.Equal(t, critique2.GetImpressions(), retrievedCritique2.GetImpressions())
+	require.Equal(t, critique2.GetScore(), retrievedCritique2.GetScore())
+
+	// Create a new book to test empty chapter critiques
+	emptyCritBook, err := viter.CreateBook(fs, "/test/empty_crit_book")
+	require.NoError(t, err)
+
+	// Set up a plan with 3 chapters but don't set any chapter critiques
+	emptyCritPlan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+		viter.NewChapter(3, "Chapter 3", "Third chapter"),
+	}
+	err = emptyCritBook.SetPlan(emptyCritPlan)
+	require.NoError(t, err)
+
+	// Test getting chapter critique that wasn't set (should return empty critique)
+	emptyCritique, err := emptyCritBook.GetChapterCritique(2)
+	require.NoError(t, err)
+	require.NotNil(t, emptyCritique)
+	require.Equal(t, "", emptyCritique.GetStrengths())
+	require.Equal(t, "", emptyCritique.GetImprovements())
+	require.Equal(t, "", emptyCritique.GetImpressions())
+	require.Equal(t, 0, emptyCritique.GetScore())
+}
+
+func TestGetChapterCritiqueInvalidIndex(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 2 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Test negative index
+	_, err = book.GetChapterCritique(-1)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+
+	// Test zero index
+	_, err = book.GetChapterCritique(0)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+
+	// Test index too high
+	_, err = book.GetChapterCritique(3)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+}
+
+func TestSetChapterCritique(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 2 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Create a critique
+	critique := &viter.Critique{
+		Strengths:    "Good pacing, Strong dialogue",
+		Improvements: "Needs more description, Character development",
+		Impressions:  "Engaging, Well-written",
+		Score:        8,
+	}
+
+	// Set the critique
+	err = book.SetChapterCritique(1, critique)
+	require.NoError(t, err)
+
+	// Verify the critique was saved to filesystem
+	critiquePath := filepath.Join(path, "chapter_1_critique.md")
+	exists, err := afero.Exists(fs, critiquePath)
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	// Read the file and verify content
+	content, err := afero.ReadFile(fs, critiquePath)
+	require.NoError(t, err)
+	require.Contains(t, string(content), "Good pacing")
+	require.Contains(t, string(content), "Needs more description")
+	require.Contains(t, string(content), "Engaging")
+	require.Contains(t, string(content), "8")
+
+	// Verify we can retrieve the critique
+	retrievedCritique, err := book.GetChapterCritique(1)
+	require.NoError(t, err)
+	require.NotNil(t, retrievedCritique)
+	require.Equal(t, critique.GetStrengths(), retrievedCritique.GetStrengths())
+	require.Equal(t, critique.GetImprovements(), retrievedCritique.GetImprovements())
+	require.Equal(t, critique.GetImpressions(), retrievedCritique.GetImpressions())
+	require.Equal(t, critique.GetScore(), retrievedCritique.GetScore())
+}
+
+func TestSetChapterCritiqueInvalidIndex(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 2 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	critique := &viter.Critique{
+		Strengths:    "Good pacing",
+		Improvements: "Needs work",
+		Impressions:  "Okay",
+		Score:        5,
+	}
+
+	// Test negative index
+	err = book.SetChapterCritique(-1, critique)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+
+	// Test zero index
+	err = book.SetChapterCritique(0, critique)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+
+	// Test index too high
+	err = book.SetChapterCritique(3, critique)
+	require.Error(t, err)
+	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+}
+
+func TestSetChapterCritiqueExpandsSlice(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 3 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+		viter.NewChapter(3, "Chapter 3", "Third chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Create critiques
+	critique1 := &viter.Critique{
+		Strengths:    "Good start",
+		Improvements: "Needs polish",
+		Impressions:  "Promising",
+		Score:        6,
+	}
+
+	critique3 := &viter.Critique{
+		Strengths:    "Great ending",
+		Improvements: "Minor issues",
+		Impressions:  "Satisfying",
+		Score:        9,
+	}
+
+	// Set critique for chapter 3 first (should expand slice)
+	err = book.SetChapterCritique(3, critique3)
+	require.NoError(t, err)
+
+	// Set critique for chapter 1
+	err = book.SetChapterCritique(1, critique1)
+	require.NoError(t, err)
+
+	// Verify both critiques can be retrieved
+	retrievedCritique1, err := book.GetChapterCritique(1)
+	require.NoError(t, err)
+	require.Equal(t, critique1.GetScore(), retrievedCritique1.GetScore())
+
+	retrievedCritique3, err := book.GetChapterCritique(3)
+	require.NoError(t, err)
+	require.Equal(t, critique3.GetScore(), retrievedCritique3.GetScore())
+
+	// Chapter 2 should have an empty critique (default)
+	retrievedCritique2, err := book.GetChapterCritique(2)
+	require.NoError(t, err)
+	require.NotNil(t, retrievedCritique2)
+	require.Equal(t, "", retrievedCritique2.GetStrengths())
+	require.Equal(t, "", retrievedCritique2.GetImprovements())
+	require.Equal(t, "", retrievedCritique2.GetImpressions())
+	require.Equal(t, 0, retrievedCritique2.GetScore())
+}
+
+func TestGetChapterMixedSetAndUnset(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := viter.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan with 4 chapters
+	plan := viter.Plan{
+		viter.NewChapter(1, "Chapter 1", "First chapter"),
+		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+		viter.NewChapter(3, "Chapter 3", "Third chapter"),
+		viter.NewChapter(4, "Chapter 4", "Fourth chapter"),
+	}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Set only chapters 1 and 3, leave 2 and 4 unset
+	chapter1 := viter.NewChapter(1, "First Chapter Content", "This is the first chapter")
+	chapter3 := viter.NewChapter(3, "Third Chapter Content", "This is the third chapter")
+
+	err = book.SetChapter(1, chapter1)
+	require.NoError(t, err)
+	err = book.SetChapter(3, chapter3)
+	require.NoError(t, err)
+
+	// Test getting set chapters
+	retrievedChapter1, err := book.GetChapter(1)
+	require.NoError(t, err)
+	require.Equal(t, "First Chapter Content", retrievedChapter1.GetTitle())
+	require.Equal(t, "This is the first chapter", retrievedChapter1.GetContent())
+	require.Equal(t, 1, retrievedChapter1.GetNumber())
+
+	retrievedChapter3, err := book.GetChapter(3)
+	require.NoError(t, err)
+	require.Equal(t, "Third Chapter Content", retrievedChapter3.GetTitle())
+	require.Equal(t, "This is the third chapter", retrievedChapter3.GetContent())
+	require.Equal(t, 3, retrievedChapter3.GetNumber())
+
+	// Test getting unset chapters (should return empty chapters)
+	emptyChapter2, err := book.GetChapter(2)
+	require.NoError(t, err)
+	require.Equal(t, "", emptyChapter2.GetTitle())
+	require.Equal(t, "", emptyChapter2.GetContent())
+	require.Equal(t, 0, emptyChapter2.GetNumber())
+
+	emptyChapter4, err := book.GetChapter(4)
+	require.NoError(t, err)
+	require.Equal(t, "", emptyChapter4.GetTitle())
+	require.Equal(t, "", emptyChapter4.GetContent())
+	require.Equal(t, 0, emptyChapter4.GetNumber())
+
+	// Verify that setting a chapter after getting an empty one works
+	chapter2 := viter.NewChapter(2, "Second Chapter Content", "This is the second chapter")
+	err = book.SetChapter(2, chapter2)
+	require.NoError(t, err)
+
+	// Now getting chapter 2 should return the set content
+	retrievedChapter2, err := book.GetChapter(2)
+	require.NoError(t, err)
+	require.Equal(t, "Second Chapter Content", retrievedChapter2.GetTitle())
+	require.Equal(t, "This is the second chapter", retrievedChapter2.GetContent())
+	require.Equal(t, 2, retrievedChapter2.GetNumber())
 }
