@@ -13,6 +13,11 @@ type PromptProvider interface {
 	WritePlanPrompt(chapterCount int) string
 	CritiquePlanPrompt() string
 	UpdatePlanPrompt() string
+	WriteChapterPrompt() string
+	CritiqueChapterPrompt() string
+	WriteNChapterPrompt(chapter int) string
+	CritiqueNChapterPrompt(chapter int) string
+	UpdateNChapterPrompt(chapter int) string
 }
 
 type TextGenerator interface {
@@ -144,6 +149,54 @@ func (v *Viter) UpdatePlan(chapterCount, minScore int) bool {
 	}
 
 	return true
+}
+
+func (v *Viter) UpdateChapter(nChapter, minScore int) bool {
+	if v.book == nil {
+		return false
+	}
+
+	if chp, err := v.book.GetChapter(nChapter); err != nil {
+		return false
+	} else if chp == nil || chp.GetContent() == "" {
+		newChp, ok := v.writeChapter(nChapter)
+		if !ok {
+			return false
+		}
+		v.book.SetChapter(nChapter, newChp)
+	}
+
+	if crit, err := v.book.GetChapterCritique(nChapter); err != nil {
+		return false
+	} else if crit == nil || crit.GetImprovements() == "" {
+		chp, _ := v.book.GetChapter(nChapter)
+		crit, ok := v.critiqueChapter(chp)
+		if !ok {
+			return false
+		}
+		v.book.SetChapterCritique(nChapter, crit)
+	}
+
+	for {
+		prevCrit, _ := v.book.GetChapterCritique(nChapter)
+		if prevCrit.GetScore() >= minScore {
+			return true
+		}
+		prevChp, _ := v.book.GetChapter(nChapter)
+		chapter, ok := v.updateChapter(prevChp, prevCrit)
+		if !ok {
+			return false
+		}
+		crit, ok := v.critiqueChapter(chapter)
+		if !ok {
+			return false
+		}
+		if crit.GetScore() <= prevCrit.GetScore() {
+			return true
+		}
+		v.book.SetChapter(nChapter, chapter)
+		v.book.SetChapterCritique(nChapter, crit)
+	}
 }
 
 func (v *Viter) writeMeta(prevMeta *BookMeta) (*BookMeta, bool) {
@@ -351,4 +404,155 @@ func (v *Viter) updatePlan(prevPlan Plan, crit *Critique) (Plan, bool) {
 	v.log.Infow("updated plan", "chapters", len(plan))
 
 	return plan, true
+}
+
+func (v *Viter) writeChapter(n int) (*Chapter, bool) {
+	v.log.Infow("writing chapter")
+
+	messages := make([]llms.MessageContent, 2)
+	messages[0] = llms.MessageContent{
+		Role: llms.ChatMessageTypeSystem,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.pp.WriteChapterPrompt()),
+		},
+	}
+	messages[1] = llms.MessageContent{
+		Role: llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.book.GetMeta().String()),
+			llms.TextPart(v.book.GetPlan().String()),
+		},
+	}
+	for i := 1; i < n; i++ {
+		chp, err := v.book.GetChapter(i)
+		if err != nil {
+			v.log.Warnw(err.Error())
+			continue
+		}
+		messages[1].Parts = append(messages[1].Parts, llms.TextPart(chp.String()))
+	}
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.WriteNChapterPrompt(n)))
+	planChp, err := v.book.GetPlanChapter(n)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(planChp.String()))
+
+	chapterData, ok := v.tg.GenerateText(messages)
+	if !ok {
+		return nil, false
+	}
+
+	chapter, err := ChapterFromString(chapterData)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+	chapter.SetNumber(n)
+
+	v.log.Infow("wrote chapter", "n", n, "title", chapter.GetTitle())
+
+	return chapter, true
+}
+
+func (v *Viter) critiqueChapter(chapter *Chapter) (*Critique, bool) {
+	v.log.Infow("critiquing chapter")
+
+	messages := make([]llms.MessageContent, 2)
+	messages[0] = llms.MessageContent{
+		Role: llms.ChatMessageTypeSystem,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.pp.CritiqueChapterPrompt()),
+		},
+	}
+	messages[1] = llms.MessageContent{
+		Role: llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.book.GetMeta().String()),
+			llms.TextPart(v.book.GetPlan().String()),
+		},
+	}
+	for i := 1; i < chapter.GetNumber(); i++ {
+		chp, err := v.book.GetChapter(i)
+		if err != nil {
+			v.log.Warnw(err.Error())
+			continue
+		}
+		messages[1].Parts = append(messages[1].Parts, llms.TextPart(chp.String()))
+	}
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(chapter.String()))
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.CritiqueNChapterPrompt(chapter.GetNumber())))
+
+	critData, ok := v.tg.GenerateText(messages)
+	if !ok {
+		return nil, false
+	}
+
+	crit, err := CritiqueFromString(critData)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+
+	v.log.Infow("critiqued chapter", "n", chapter.GetNumber(), "score", crit.GetScore())
+
+	return crit, true
+}
+
+func (v *Viter) updateChapter(prevChp *Chapter, crit *Critique) (*Chapter, bool) {
+	v.log.Infow("updating chapter", "n", prevChp.GetNumber())
+
+	messages := make([]llms.MessageContent, 4)
+	messages[0] = llms.MessageContent{
+		Role: llms.ChatMessageTypeSystem,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.pp.WriteChapterPrompt()),
+		},
+	}
+	messages[1] = llms.MessageContent{
+		Role: llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.book.GetMeta().String()),
+			llms.TextPart(v.book.GetPlan().String()),
+		},
+	}
+	for i := 1; i < prevChp.GetNumber(); i++ {
+		chp, err := v.book.GetChapter(i)
+		if err != nil {
+			v.log.Warnw(err.Error())
+			continue
+		}
+		messages[1].Parts = append(messages[1].Parts, llms.TextPart(chp.String()))
+	}
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.WriteNChapterPrompt(prevChp.GetNumber())))
+	messages[2] = llms.MessageContent{
+		Role: llms.ChatMessageTypeAI,
+		Parts: []llms.ContentPart{
+			llms.TextPart(prevChp.String()),
+		},
+	}
+	messages[3] = llms.MessageContent{
+		Role: llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{
+			llms.TextPart(v.pp.UpdateNChapterPrompt(prevChp.GetNumber())),
+			llms.TextPart(crit.GetImprovements()),
+		},
+	}
+
+	chapterData, ok := v.tg.GenerateText(messages)
+	if !ok {
+		return nil, false
+	}
+
+	chp, err := ChapterFromString(chapterData)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+	chp.SetNumber(prevChp.GetNumber())
+
+	v.log.Infow("updated chapter", "n", chp.GetNumber())
+
+	return chp, true
 }

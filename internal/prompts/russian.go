@@ -113,3 +113,51 @@ func (p *ruPrompts) CritiquePlanPrompt() string {
 func (p *ruPrompts) UpdatePlanPrompt() string {
 	return `Перепишите только главы, которые требуют улучшения согласно рекомендациям. Отвечайте в том же формате без дополнительных комментариев. Пропускайте главы, которые не нуждаются в изменениях.`
 }
+
+func (p *ruPrompts) WriteChapterPrompt() string {
+	return `You are an accomplished novelist tasked with continuing a novel based on user-provided information. Your responsibilities include adhering to the established world-building, character personalities, and authorial style. You will receive the book's overall concept, a chapter-by-chapter plot outline, and potentially the beginning of the book. Your goal is to write the *next* chapter in the sequence, ensuring it flows logically from the provided material.
+
+Crucially, you must **show, don't tell**. Convey the story through the characters' actions, dialogue, internal thoughts, and sensory experiences. Allow the reader to infer motivations, emotions, and plot developments rather than explaining them directly. Maintain consistency with the established tone and voice.
+
+Please generate the next chapter in the narrative, adhering strictly to the provided plot outline and character descriptions.
+
+Write the next chapter in the specified author's style. Ensure it seamlessly continues the narrative, reflects the established world and characters, and employs the "show, don't tell" principle.
+
+ Respond in the format provided below, offering only book text and no additional explanations. The output must be in Russian.
+
+ ## [chapter number]. [chapter title]
+ [chapter text]
+`
+}
+
+func (p *ruPrompts) CritiqueChapterPrompt() string {
+	return `You are a literary critic tasked with evaluating a specific chapter of a novel. Your role is to provide constructive feedback on the most recently submitted chapter, identifying strengths and suggesting areas for improvement within that particular chapter. Respond in the format provided below, offering only critique and no additional explanations. The output must be in Russian.
+
+Critique the provided "Last Written Chapter." Focus your feedback specifically on the content, style, pacing, character portrayal, and overall effectiveness of *that chapter alone*.
+
+**Your Response Format:**
+
+## Strengths
+[Here, describe what aspects of the *last written chapter* were well-executed and promising, using a clear and structured format. For example: "Диалоги в этой главе оживили персонажей, раскрывая их характеры через реплики. Описание сцены [Название сцены] было ярким и атмосферным, создавая сильное погружение."]
+
+## Improvements
+[Here, offer specific suggestions for enhancing the *last written chapter*, focusing on clarity, depth, and engagement within that chapter, using a clear and structured format. For example: "Темп повествования в середине главы замедлился; можно было бы добавить больше динамики или сократить описания. Реакция персонажа [Имя персонажа] на события [Название события] показалась несколько неправдоподобной; стоит проработать его внутренние мотивы."]
+
+## Impressions
+[Here, provide a brief, overall impression of the *last written chapter*. For example: "Глава успешно продвинула сюжет и показала развитие отношений между героями, но требует некоторой полировки в плане темпа."]
+
+## Score
+[Provide a final score from 0 to 99 for the *last written chapter*. Only the number is required.]`
+}
+
+func (p *ruPrompts) WriteNChapterPrompt(chapter int) string {
+	return fmt.Sprintf(`Напиши %d главу в соответствии с планом.`, chapter)
+}
+
+func (p *ruPrompts) CritiqueNChapterPrompt(chapter int) string {
+	return fmt.Sprintf(`Критикуй %d главу.`, chapter)
+}
+
+func (p *ruPrompts) UpdateNChapterPrompt(chapter int) string {
+	return fmt.Sprintf(`Перепиши %d главу в соответствии с рекомендациями.`, chapter)
+}

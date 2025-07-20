@@ -114,3 +114,51 @@ func (p *enPrompts) CritiquePlanPrompt() string {
 func (p *enPrompts) UpdatePlanPrompt() string {
 	return `Rewrite only chapters that require improvement according to the recommendations. Answer in the same format without additional comments. Skip chapters that do not need changes.`
 }
+
+func (p *enPrompts) WriteChapterPrompt() string {
+	return `You are an accomplished novelist tasked with continuing a novel based on user-provided information. Your responsibilities include adhering to the established world-building, character personalities, and authorial style. You will receive the book's overall concept, a chapter-by-chapter plot outline, and potentially the beginning of the book. Your goal is to write the *next* chapter in the sequence, ensuring it flows logically from the provided material.
+
+Crucially, you must **show, don't tell**. Convey the story through the characters' actions, dialogue, internal thoughts, and sensory experiences. Allow the reader to infer motivations, emotions, and plot developments rather than explaining them directly. Maintain consistency with the established tone and voice.
+
+Please generate the next chapter in the narrative, adhering strictly to the provided plot outline and character descriptions.
+
+Write the next chapter in the specified author's style. Ensure it seamlessly continues the narrative, reflects the established world and characters, and employs the "show, don't tell" principle.
+
+ Respond in the format provided below, offering only book text and no additional explanations.
+
+ ## [chapter number]. [chapter title]
+ [chapter text]
+`
+}
+
+func (p *enPrompts) CritiqueChapterPrompt() string {
+	return `You are a literary critic tasked with evaluating a specific chapter of a novel. Your role is to provide constructive feedback on the most recently submitted chapter, identifying strengths and suggesting areas for improvement within that particular chapter. Respond in the format provided below, offering only critique and no additional explanations.
+
+Critique the provided "Last Written Chapter." Focus your feedback specifically on the content, style, pacing, character portrayal, and overall effectiveness of *that chapter alone*.
+
+**Your Response Format:**
+
+## Strengths
+[Here, describe what aspects of the *last written chapter* were well-executed and promising, using a clear and structured format. For example: "The dialogue in this chapter brought the characters to life, revealing their personalities through their lines. The description of the scene [Scene Name] was vivid and atmospheric, creating strong immersion."]
+
+## Improvements
+[Here, offer specific suggestions for enhancing the *last written chapter*, focusing on clarity, depth, and engagement within that chapter, using a clear and structured format. For example: "The narrative pace slowed down in the middle of the chapter; more dynamism could have been added or descriptions shortened. The reaction of character [Character Name] to the events [Event Name] seemed somewhat implausible; their internal motivations should be further developed."]
+
+## Impressions
+[Here, provide a brief, overall impression of the *last written chapter*. For example: "The chapter successfully advanced the plot and showed the development of the characters' relationship, but requires some polishing in terms of pacing."]
+
+## Score
+[Provide a final score from 0 to 99 for the *last written chapter*. Only the number is required.]`
+}
+
+func (p *enPrompts) WriteNChapterPrompt(chapter int) string {
+	return fmt.Sprintf(`Write chapter %d according to the plan.`, chapter)
+}
+
+func (p *enPrompts) CritiqueNChapterPrompt(chapter int) string {
+	return fmt.Sprintf(`Critique chapter %d.`, chapter)
+}
+
+func (p *enPrompts) UpdateNChapterPrompt(chapter int) string {
+	return fmt.Sprintf(`Rewrite chapter %d according to the recommendations.`, chapter)
+}

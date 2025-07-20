@@ -17,7 +17,7 @@ func main() {
 	var configPath string
 	var debug bool
 	var create, meta bool
-	var plan, score int
+	var plan, chapter, score int
 	var help bool
 
 	flag.StringVar(&path, "path", ".", "Path to the book directory")
@@ -27,6 +27,7 @@ func main() {
 	flag.BoolVar(&create, "create", false, "Create a new book")
 	flag.BoolVar(&meta, "meta", false, "Update book metadata")
 	flag.IntVar(&plan, "plan", 0, "Update book plan with given count of chapters")
+	flag.IntVar(&chapter, "chapter", 0, "Update chapter with given number")
 	flag.IntVar(&score, "score", 99, "Target score of the book")
 	flag.BoolVar(&help, "help", false, "Print the help message")
 	flag.Parse()
@@ -36,7 +37,7 @@ func main() {
 		return
 	}
 
-	if !create && !meta && plan == 0 {
+	if !create && !meta && plan == 0 && chapter == 0 {
 		printHelp()
 		return
 	}
@@ -107,6 +108,13 @@ func main() {
 			return
 		}
 	}
+
+	if chapter > 0 {
+		ok = v.UpdateChapter(chapter, score)
+		if !ok {
+			return
+		}
+	}
 }
 
 func printHelp() {
@@ -128,6 +136,8 @@ func printHelp() {
 	fmt.Println("        Update book metadata")
 	fmt.Println("  -plan int")
 	fmt.Println("        Update book plan with given count of chapters")
+	fmt.Println("  -chapter int")
+	fmt.Println("        Update chapter with given number")
 	fmt.Println("  -score int")
 	fmt.Println("        Target score of the book")
 	fmt.Println("  -debug")
