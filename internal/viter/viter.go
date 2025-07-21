@@ -97,6 +97,7 @@ func (v *Viter) UpdateMeta(minScore int) bool {
 		if !ok {
 			return false
 		}
+		meta = v.book.GetMeta().MergedCopy(meta)
 		crit, ok := v.critiqueMeta(meta)
 		if !ok {
 			return false
@@ -137,6 +138,7 @@ func (v *Viter) UpdatePlan(chapterCount, minScore int) bool {
 		if !ok {
 			return false
 		}
+		plan = v.book.GetPlan().MergedCopy(plan)
 		crit, ok := v.critiquePlan(plan)
 		if !ok {
 			return false
@@ -259,6 +261,10 @@ func (v *Viter) critiqueMeta(meta *BookMeta) (*Critique, bool) {
 		v.log.Warnw(err.Error())
 		return nil, false
 	}
+	if crit.GetImprovements() == "" {
+		v.log.Warnw("no improvements found")
+		return nil, false
+	}
 
 	v.log.Infow("critiqued meta", "score", crit.GetScore())
 
@@ -362,6 +368,10 @@ func (v *Viter) critiquePlan(plan Plan) (*Critique, bool) {
 	crit, err := CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
+		return nil, false
+	}
+	if crit.GetImprovements() == "" {
+		v.log.Warnw("no improvements found")
 		return nil, false
 	}
 
@@ -492,6 +502,10 @@ func (v *Viter) critiqueChapter(chapter *Chapter) (*Critique, bool) {
 	crit, err := CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
+		return nil, false
+	}
+	if crit.GetImprovements() == "" {
+		v.log.Warnw("no improvements found")
 		return nil, false
 	}
 
