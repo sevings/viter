@@ -1490,3 +1490,252 @@ func TestGetChapterMixedSetAndUnset(t *testing.T) {
 	require.Equal(t, "This is the second chapter", retrievedChapter2.GetContent())
 	require.Equal(t, 2, retrievedChapter2.GetNumber())
 }
+
+func TestBookMetaMergedCopy(t *testing.T) {
+	// Test merging with empty target
+	original := &viter.BookMeta{}
+	original.SetStyle("Fantasy")
+	original.SetGenres([]string{"Epic Fantasy", "Adventure"})
+	original.SetLogline("A hero's journey")
+	original.SetWorld("Middle Earth")
+	original.SetProtagonists([]viter.Character{
+		viter.NewCharacter("Frodo", "A hobbit"),
+	})
+	original.SetAntagonists([]viter.Character{
+		viter.NewCharacter("Sauron", "Dark Lord"),
+	})
+	original.SetMinorCharacters([]viter.Character{
+		viter.NewCharacter("Sam", "Loyal friend"),
+	})
+	original.SetPlot("The ring must be destroyed")
+	original.SetTitle("The Lord of the Rings")
+
+	other := &viter.BookMeta{}
+	other.SetStyle("Science Fiction")
+	other.SetGenres([]string{"Space Opera"})
+	other.SetLogline("A galactic adventure")
+	other.SetWorld("Galaxy Far Far Away")
+	other.SetProtagonists([]viter.Character{
+		viter.NewCharacter("Luke", "Jedi Knight"),
+	})
+	other.SetAntagonists([]viter.Character{
+		viter.NewCharacter("Vader", "Sith Lord"),
+	})
+	other.SetMinorCharacters([]viter.Character{
+		viter.NewCharacter("Han", "Smuggler"),
+	})
+	other.SetPlot("Destroy the Death Star")
+	other.SetTitle("Star Wars")
+
+	// Test complete merge
+	merged := original.MergedCopy(other)
+
+	// Verify original is unchanged
+	require.Equal(t, "Fantasy", original.GetStyle())
+	require.Equal(t, []string{"Epic Fantasy", "Adventure"}, original.GetGenres())
+	require.Equal(t, "A hero's journey", original.GetLogline())
+	require.Equal(t, "Middle Earth", original.GetWorld())
+	require.Equal(t, "The ring must be destroyed", original.GetPlot())
+	require.Equal(t, "The Lord of the Rings", original.GetTitle())
+
+	// Verify merged has other's values
+	require.Equal(t, "Science Fiction", merged.GetStyle())
+	require.Equal(t, []string{"Space Opera"}, merged.GetGenres())
+	require.Equal(t, "A galactic adventure", merged.GetLogline())
+	require.Equal(t, "Galaxy Far Far Away", merged.GetWorld())
+	require.Equal(t, "Destroy the Death Star", merged.GetPlot())
+	require.Equal(t, "Star Wars", merged.GetTitle())
+	require.Len(t, merged.GetProtagonists(), 1)
+	require.Equal(t, "Luke", merged.GetProtagonists()[0].GetName())
+	require.Len(t, merged.GetAntagonists(), 1)
+	require.Equal(t, "Vader", merged.GetAntagonists()[0].GetName())
+	require.Len(t, merged.GetMinorCharacters(), 1)
+	require.Equal(t, "Han", merged.GetMinorCharacters()[0].GetName())
+}
+
+func TestBookMetaMergedCopyPartial(t *testing.T) {
+	original := &viter.BookMeta{}
+	original.SetStyle("Fantasy")
+	original.SetGenres([]string{"Epic Fantasy"})
+	original.SetLogline("A hero's journey")
+	original.SetWorld("Middle Earth")
+	original.SetPlot("The ring must be destroyed")
+	original.SetTitle("The Lord of the Rings")
+
+	// Only some fields set in other
+	other := &viter.BookMeta{}
+	other.SetStyle("Dark Fantasy")
+	other.SetLogline("A darker journey")
+	// Other fields empty/nil
+
+	merged := original.MergedCopy(other)
+
+	// Verify original unchanged
+	require.Equal(t, "Fantasy", original.GetStyle())
+	require.Equal(t, "A hero's journey", original.GetLogline())
+
+	// Verify merged has mixed values
+	require.Equal(t, "Dark Fantasy", merged.GetStyle())              // From other
+	require.Equal(t, []string{"Epic Fantasy"}, merged.GetGenres())   // From original
+	require.Equal(t, "A darker journey", merged.GetLogline())        // From other
+	require.Equal(t, "Middle Earth", merged.GetWorld())              // From original
+	require.Equal(t, "The ring must be destroyed", merged.GetPlot()) // From original
+	require.Equal(t, "The Lord of the Rings", merged.GetTitle())     // From original
+}
+
+func TestBookMetaMergedCopyEmpty(t *testing.T) {
+	original := &viter.BookMeta{}
+	original.SetStyle("Fantasy")
+	original.SetTitle("Original Title")
+
+	empty := &viter.BookMeta{}
+	merged := original.MergedCopy(empty)
+
+	// Should be identical to original since other is empty
+	require.Equal(t, original.GetStyle(), merged.GetStyle())
+	require.Equal(t, original.GetTitle(), merged.GetTitle())
+
+	// But should be different objects
+	require.NotSame(t, original, merged)
+}
+
+func TestBookMetaMergedCopyNil(t *testing.T) {
+	original := &viter.BookMeta{}
+	original.SetStyle("Fantasy")
+	original.SetTitle("Original Title")
+
+	// Test with nil other - should not panic and return copy of original
+	merged := original.MergedCopy(nil)
+	require.Equal(t, original.GetStyle(), merged.GetStyle())
+	require.Equal(t, original.GetTitle(), merged.GetTitle())
+	require.NotSame(t, original, merged)
+}
+
+func TestPlanMergedCopy(t *testing.T) {
+	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
+	ch2 := viter.NewChapter(2, "Chapter 2", "Content 2")
+	ch0 := viter.NewChapter(0, "Unnumbered", "No number")
+
+	original := viter.Plan{ch1, ch2, ch0}
+
+	newCh2 := viter.NewChapter(2, "New Chapter 2", "New Content 2")
+	ch3 := viter.NewChapter(3, "Chapter 3", "Content 3")
+	anotherCh0 := viter.NewChapter(0, "Another Unnumbered", "Also no number")
+
+	other := viter.Plan{newCh2, ch3, anotherCh0}
+
+	merged := original.MergedCopy(other)
+
+	// Verify original unchanged
+	require.Len(t, original, 3)
+	require.Equal(t, "Chapter 2", original[1].GetTitle())
+
+	// Verify merged result
+	require.Len(t, merged, 5) // 3 original + 2 new (chapter 2 replaced, chapter 3 added, unnumbered added)
+
+	// Chapter 1 should remain unchanged
+	require.Equal(t, 1, merged[0].GetNumber())
+	require.Equal(t, "Chapter 1", merged[0].GetTitle())
+	require.Equal(t, "Content 1", merged[0].GetContent())
+
+	// Chapter 2 should be replaced
+	chap2Found := false
+	for _, ch := range merged {
+		if ch.GetNumber() == 2 {
+			require.Equal(t, "New Chapter 2", ch.GetTitle())
+			require.Equal(t, "New Content 2", ch.GetContent())
+			chap2Found = true
+			break
+		}
+	}
+	require.True(t, chap2Found, "Chapter 2 should be found and replaced")
+
+	// Chapter 3 should be added
+	chap3Found := false
+	for _, ch := range merged {
+		if ch.GetNumber() == 3 {
+			require.Equal(t, "Chapter 3", ch.GetTitle())
+			require.Equal(t, "Content 3", ch.GetContent())
+			chap3Found = true
+			break
+		}
+	}
+	require.True(t, chap3Found, "Chapter 3 should be added")
+
+	// Both unnumbered chapters should be present
+	unnumberedCount := 0
+	for _, ch := range merged {
+		if ch.GetNumber() == 0 {
+			unnumberedCount++
+		}
+	}
+	require.Equal(t, 2, unnumberedCount, "Should have 2 unnumbered chapters")
+}
+
+func TestPlanMergedCopyEmpty(t *testing.T) {
+	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
+	original := viter.Plan{ch1}
+
+	empty := viter.Plan{}
+	merged := original.MergedCopy(empty)
+
+	// Should be identical to original
+	require.Len(t, merged, 1)
+	require.Equal(t, original[0].GetNumber(), merged[0].GetNumber())
+	require.Equal(t, original[0].GetTitle(), merged[0].GetTitle())
+	require.Equal(t, original[0].GetContent(), merged[0].GetContent())
+}
+
+func TestPlanMergedCopyOnlyUnnumbered(t *testing.T) {
+	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
+	original := viter.Plan{ch1}
+
+	unCh1 := viter.NewChapter(0, "Unnumbered 1", "No number 1")
+	unCh2 := viter.NewChapter(0, "Unnumbered 2", "No number 2")
+	other := viter.Plan{unCh1, unCh2}
+
+	merged := original.MergedCopy(other)
+
+	require.Len(t, merged, 3) // 1 original + 2 unnumbered
+	require.Equal(t, 1, merged[0].GetNumber())
+	require.Equal(t, 0, merged[1].GetNumber())
+	require.Equal(t, 0, merged[2].GetNumber())
+	require.Equal(t, "Unnumbered 1", merged[1].GetTitle())
+	require.Equal(t, "Unnumbered 2", merged[2].GetTitle())
+}
+
+func TestPlanMergedCopyAllReplaced(t *testing.T) {
+	oldCh1 := viter.NewChapter(1, "Old Chapter 1", "Old Content 1")
+	oldCh2 := viter.NewChapter(2, "Old Chapter 2", "Old Content 2")
+	original := viter.Plan{oldCh1, oldCh2}
+
+	newCh1 := viter.NewChapter(1, "New Chapter 1", "New Content 1")
+	newCh2 := viter.NewChapter(2, "New Chapter 2", "New Content 2")
+	other := viter.Plan{newCh1, newCh2}
+
+	merged := original.MergedCopy(other)
+
+	require.Len(t, merged, 2)
+	require.Equal(t, "New Chapter 1", merged[0].GetTitle())
+	require.Equal(t, "New Chapter 2", merged[1].GetTitle())
+}
+
+func TestPlanMergedCopyEmptyOriginal(t *testing.T) {
+	// Test merging into an empty plan
+	empty := viter.Plan{}
+
+	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
+	ch2 := viter.NewChapter(0, "Unnumbered", "No number")
+	other := viter.Plan{ch1, ch2}
+
+	merged := empty.MergedCopy(other)
+
+	// Should contain all chapters from other
+	require.Len(t, merged, 2)
+	require.Equal(t, 1, merged[0].GetNumber())
+	require.Equal(t, "Chapter 1", merged[0].GetTitle())
+	require.Equal(t, "Content 1", merged[0].GetContent())
+	require.Equal(t, 0, merged[1].GetNumber())
+	require.Equal(t, "Unnumbered", merged[1].GetTitle())
+	require.Equal(t, "No number", merged[1].GetContent())
+}

@@ -534,6 +534,9 @@ func (bm *BookMeta) String() string {
 }
 
 func (bm *BookMeta) merge(other *BookMeta) bool {
+	if other == nil {
+		return false
+	}
 	changed := false
 	if other.style != "" {
 		bm.style = other.style
@@ -572,6 +575,22 @@ func (bm *BookMeta) merge(other *BookMeta) bool {
 		changed = true
 	}
 	return changed
+}
+
+func (bm *BookMeta) MergedCopy(other *BookMeta) *BookMeta {
+	newBM := &BookMeta{
+		style:        bm.style,
+		genres:       bm.genres,
+		logline:      bm.logline,
+		world:        bm.world,
+		protagonists: bm.protagonists,
+		antagonists:  bm.antagonists,
+		minorChars:   bm.minorChars,
+		plot:         bm.plot,
+		title:        bm.title,
+	}
+	newBM.merge(other)
+	return newBM
 }
 
 func (bm *BookMeta) GetStyle() string {
@@ -847,6 +866,10 @@ func (p Plan) merge(other Plan) Plan {
 	}
 
 	return result
+}
+
+func (p Plan) MergedCopy(other Plan) Plan {
+	return p.merge(other)
 }
 
 func (p Plan) Count() int {
