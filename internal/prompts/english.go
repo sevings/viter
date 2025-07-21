@@ -70,7 +70,7 @@ func (p *enPrompts) UpdateMetaPrompt() string {
 }
 
 func (p *enPrompts) WritePlanPrompt(chapterCount int) string {
-	prompt := `You are an experienced novelist tasked with creating a detailed chapter-by-chapter plan for a book based on the provided metadata. Your goal is to create an engaging narrative structure that unfolds logically and keeps readers captivated throughout the story. Each chapter should advance the plot, develop characters, or reveal important information. Respond in the format provided below, with no additional explanations or commentary.
+	prompt := `You are an experienced novelist tasked with creating a detailed chapter-by-chapter plan for a book based on the provided metadata. Your goal is to create an engaging narrative structure that unfolds logically and keeps readers captivated throughout the story. Each chapter should advance the plot, develop characters, or reveal important information. In the finished book each chapter should take up 4-6 pages. Respond in the format provided below, with no additional explanations or commentary.
 
 ## 1. [Chapter Title]
 [Provide a detailed description of what happens in this chapter, including key events, character development, conflicts, and how it sets up the story]
@@ -98,11 +98,11 @@ Guidelines:
 func (p *enPrompts) CritiquePlanPrompt() string {
 	return `You are a literary critic tasked with evaluating a book plan. Your role is to provide constructive feedback on the narrative structure, pacing, character development, and overall story flow. Respond in the format provided below, offering only critique and no additional explanations.
 
-## Strengths
-[Here, describe what aspects of the plan are well-executed and promising, focusing on structure, pacing, character arcs, and plot development. For example: "Strong opening that establishes stakes and character motivation. Good balance between action and character development. Logical plot progression with effective use of rising tension."]
-
 ## Improvements
 [Here, offer specific suggestions for enhancement, focusing on narrative structure, character development, pacing, and plot consistency. For example: "Consider strengthening the midpoint twist to avoid sagging middle. Develop secondary character arcs more fully. Ensure each chapter ends with a compelling hook or revelation."]
+
+## Strengths
+[Here, describe what aspects of the plan are well-executed and promising, focusing on structure, pacing, character arcs, and plot development. For example: "Strong opening that establishes stakes and character motivation. Good balance between action and character development. Logical plot progression with effective use of rising tension."]
 
 ## Impressions
 [Here, provide a brief, overall impression of the plan's potential. For example: "The plan shows strong potential for an engaging narrative but needs refinement in pacing and character development."]
@@ -132,27 +132,50 @@ Write the next chapter in the specified author's style. Ensure it seamlessly con
 }
 
 func (p *enPrompts) CritiqueChapterPrompt() string {
-	return `You are a literary critic tasked with evaluating a specific chapter of a novel. Your role is to provide constructive feedback on the most recently submitted chapter, identifying strengths and suggesting areas for improvement within that particular chapter. Respond in the format provided below, offering only critique and no additional explanations.
+	return `You are a literary critic tasked with evaluating a specific novel chapter. Your role is to provide constructive feedback on the most recently submitted chapter, identifying its strengths and suggesting areas for improvement within this particular chapter. Respond in the format provided below, offering only criticism and no additional explanations.
 
-Critique the provided "Last Written Chapter." Focus your feedback specifically on the content, style, pacing, character portrayal, and overall effectiveness of *that chapter alone*.
+Your Task:
 
-**Your Response Format:**
+Critique the provided last written chapter. Focus your feedback exclusively on the content, style, pacing, character portrayal, and overall effectiveness of this chapter alone. Pay close attention to the following aspects:
+Plot Dynamics: How well does the plot advance in this chapter? Are there moments of tension and release?
+Plot Logic: Does the sequence of events make sense within the established narrative? Are there any inconsistencies?
+Pacing: Does the speed of the narrative align with the events depicted? Are there parts that drag or feel rushed?
+Character Development: Do the characters' actions, thoughts, and dialogue align with their established personalities? Is there a sense of growth or change?
+Character Motivation: Are the reasons behind the characters' actions clear and believable?
+Realism/Plausibility: Do the events and character reactions feel authentic within the context of the story's world?
+Dialogue: Is the dialogue natural, engaging, and revealing of character? Does it serve the plot?
+Authorial Voice/Language: Is the writing style consistent and effective? Is the language precise and expressive?
+Imagery/Figurative Language: Is there effective use of metaphors, similes, or other descriptive techniques to enhance the narrative?
+Sentence Structure: Is there variety in sentence construction, or is it repetitive?
+Atmosphere: Does the chapter successfully evoke a specific mood or feeling?
+Emotional Impact: Does the chapter elicit the intended emotions from the reader?
+World Immersion: Does the chapter help the reader feel present in the story's world?
+Detailing: Is the level of detail appropriate? Is it descriptive without being overwhelming?
 
-## Strengths
-[Here, describe what aspects of the *last written chapter* were well-executed and promising, using a clear and structured format. For example: "The dialogue in this chapter brought the characters to life, revealing their personalities through their lines. The description of the scene [Scene Name] was vivid and atmospheric, creating strong immersion."]
+Your Response Format:
 
 ## Improvements
-[Here, offer specific suggestions for enhancing the *last written chapter*, focusing on clarity, depth, and engagement within that chapter, using a clear and structured format. For example: "The narrative pace slowed down in the middle of the chapter; more dynamism could have been added or descriptions shortened. The reaction of character [Character Name] to the events [Event Name] seemed somewhat implausible; their internal motivations should be further developed."]
+[Here, offer specific recommendations for improving the last written chapter, focusing on clarity, depth, and engagement within this chapter, using a clear and structured format. Group feedback by the areas listed above where applicable. For example:
+* **Pacing**: 'The narrative pace in the middle of the chapter slowed down; more dynamism could be added, or descriptions could be shortened to maintain tension.'
+* **Character Motivation**: 'Character [Character Name]'s reaction to event [Event Name] seemed somewhat implausible; their internal motives should be explored more, perhaps by adding an internal monologue or a hint of past experience.'
+* **Plot Logic**: 'The scene where [Scene Description] raises questions in terms of plot logic. It's necessary to ensure that the transition from [Event A] to [Event B] is justified.'
+* **Language**: 'Some sentences are too long and convoluted, making them difficult to process. It is recommended to simplify the syntax in such moments.']
+
+## Strengths
+[Here, describe which aspects of the last written chapter were well-executed and promising, using a clear and structured format. Group feedback by the areas listed above where applicable. For example:
+* **Dialogue**: 'The dialogue in this chapter brought the characters to life, revealing their personalities through their lines. The tension between [Character A] and [Character B] was particularly well-shown.'
+* **Atmosphere**: 'The description of [Setting] created an oppressive atmosphere, fitting the chapter's mood.'
+* **Imagery**: 'The use of the metaphor '[Example of metaphor]' effectively conveyed the character's internal state.']
 
 ## Impressions
-[Here, provide a brief, overall impression of the *last written chapter*. For example: "The chapter successfully advanced the plot and showed the development of the characters' relationship, but requires some polishing in terms of pacing."]
+[Here, give a brief, overall impression of the last written chapter. For example: 'The chapter successfully advanced the plot and showed the development of character relationships, but it requires some polishing in terms of pacing and logical transitions.']
 
 ## Score
-[Provide a final score from 0 to 99 for the *last written chapter*. Only the number is required.]`
+[Provide a final score from 0 to 99 for the last written chapter. Only the number is required.]`
 }
 
 func (p *enPrompts) WriteNChapterPrompt(chapter int) string {
-	return fmt.Sprintf(`Write chapter %d according to the plan.`, chapter)
+	return fmt.Sprintf(`Write chapter %d according to the plan in the provided format.`, chapter)
 }
 
 func (p *enPrompts) CritiqueNChapterPrompt(chapter int) string {
@@ -160,5 +183,5 @@ func (p *enPrompts) CritiqueNChapterPrompt(chapter int) string {
 }
 
 func (p *enPrompts) UpdateNChapterPrompt(chapter int) string {
-	return fmt.Sprintf(`Rewrite chapter %d according to the recommendations.`, chapter)
+	return fmt.Sprintf(`Rewrite chapter %d according to the recommendations. Write the chapter in the provided format.`, chapter)
 }
