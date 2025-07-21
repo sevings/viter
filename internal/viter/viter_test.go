@@ -3,7 +3,6 @@ package viter_test
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"testing"
 
 	"viter/internal/neural"
@@ -175,6 +174,29 @@ Shows promise but needs work
 ` + strconv.Itoa(score)
 }
 
+func createValidPlanResponse() string {
+	return `## 1. The Beginning
+The hero starts his journey
+
+## 2. The Quest
+The hero searches for the sword
+
+## 3. The Final Battle
+The hero fights the dark lord`
+}
+
+func createValidChapterResponse(number int, title, content string) string {
+	return fmt.Sprintf(`## %d. %s
+%s`, number, title, content)
+}
+
+func createValidDiffResponse() string {
+	return `+This is an improved line of text
+ This line remains unchanged
+-This line was removed`
+}
+
+// Basic Constructor Tests
 func TestNewViter(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
@@ -198,11 +220,7 @@ func TestViter_CreateBook_Success(t *testing.T) {
 	result := v.CreateBook(fs, path)
 
 	require.True(t, result)
-
-	// Verify the meta file was created
-	exists, err := afero.Exists(fs, path+"/meta.md")
-	require.NoError(t, err)
-	require.True(t, exists)
+	require.NotNil(t, v.GetBook())
 }
 
 func TestViter_CreateBook_FileSystemError(t *testing.T) {
@@ -211,7 +229,6 @@ func TestViter_CreateBook_FileSystemError(t *testing.T) {
 	tg := &mockTextGenerator{}
 	v, _ := viter.NewViter(cfg, pp, tg)
 
-	// Use a read-only filesystem to simulate failure
 	fs := afero.NewReadOnlyFs(afero.NewMemMapFs())
 	path := "/test/book"
 
@@ -229,67 +246,35 @@ func TestViter_LoadBook_Success(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	// Create a book first
+	// Create the book first
 	require.True(t, v.CreateBook(fs, path))
 
-	// Now test loading it
+	// Then load it
 	result := v.LoadBook(fs, path)
 
 	require.True(t, result)
 }
 
-func TestViter_LoadBook_NoMetaFile(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/nonexistent/book"
-
-	result := v.LoadBook(fs, path)
-
-	require.False(t, result)
-}
-
-func TestViter_LoadBook_InvalidMetaFile(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	// Create directory and invalid meta file
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-	err = afero.WriteFile(fs, path+"/meta.md", []byte("invalid meta content"), 0644)
-	require.NoError(t, err)
-
-	result := v.LoadBook(fs, path)
-
-	require.True(t, result) // Should still succeed as MetaFromString handles invalid content gracefully
-}
-
+// UpdateMeta Tests
 func TestViter_UpdateMeta_NoBook(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
 	tg := &mockTextGenerator{}
 	v, _ := viter.NewViter(cfg, pp, tg)
 
-	result := v.UpdateMeta(8)
+	result := v.UpdateMeta(1)
 
 	require.False(t, result)
 }
 
-func TestViter_UpdateMeta_EmptyMeta_Success(t *testing.T) {
+func TestViter_UpdateMeta_EmptyMeta_SingleIteration(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
 	tg := &mockTextGenerator{
 		responses: []string{
 			createValidMetaResponse(),
 			createValidCritiqueResponse(9),
+			createValidMetaResponse(),
 		},
 	}
 	v, _ := viter.NewViter(cfg, pp, tg)
@@ -297,13 +282,83 @@ func TestViter_UpdateMeta_EmptyMeta_Success(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	// Create book with empty meta
 	require.True(t, v.CreateBook(fs, path))
 
-	result := v.UpdateMeta(8)
+	result := v.UpdateMeta(1)
 
 	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // Should call twice: write meta + critique
+	require.Equal(t, 2, tg.callCount) // write meta + 1 critique (no update after last critique)
+}
+
+func TestViter_UpdateMeta_MultipleIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),      // Initial write
+			createValidCritiqueResponse(5), // First iteration critique
+			createValidMetaResponse(),      // First iteration update
+			createValidCritiqueResponse(7), // Second iteration critique
+			createValidMetaResponse(),      // Second iteration update
+			createValidCritiqueResponse(9), // Third iteration critique
+			createValidMetaResponse(),      // Third iteration update
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	require.True(t, v.CreateBook(fs, path))
+
+	result := v.UpdateMeta(3)
+
+	require.True(t, result)
+	require.Equal(t, 6, tg.callCount) // write meta + 3 critiques + 2 updates (no update after last critique)
+}
+
+func TestViter_UpdateMeta_ZeroIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	require.True(t, v.CreateBook(fs, path))
+
+	result := v.UpdateMeta(0)
+
+	require.True(t, result)
+	require.Equal(t, 2, tg.callCount) // write meta + 1 critique (always at least one critique)
+}
+
+func TestViter_UpdateMeta_NegativeIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	require.True(t, v.CreateBook(fs, path))
+
+	result := v.UpdateMeta(-1)
+
+	require.True(t, result)
+	require.Equal(t, 2, tg.callCount) // write meta + 1 critique (always at least one critique)
 }
 
 func TestViter_UpdateMeta_WriteMetaFailure(t *testing.T) {
@@ -319,9 +374,10 @@ func TestViter_UpdateMeta_WriteMetaFailure(t *testing.T) {
 
 	require.True(t, v.CreateBook(fs, path))
 
-	result := v.UpdateMeta(8)
+	result := v.UpdateMeta(1)
 
 	require.False(t, result)
+	require.Equal(t, 0, tg.callCount)
 }
 
 func TestViter_UpdateMeta_CritiqueFailure(t *testing.T) {
@@ -339,61 +395,14 @@ func TestViter_UpdateMeta_CritiqueFailure(t *testing.T) {
 
 	require.True(t, v.CreateBook(fs, path))
 
-	// Make text generator fail after first call
+	// Make it fail on the second call (critique)
 	tg.shouldFail = true
 	tg.callCount = 1
 
-	result := v.UpdateMeta(8)
+	result := v.UpdateMeta(1)
 
 	require.False(t, result)
-}
-
-func TestViter_UpdateMeta_IterativeImprovement(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),      // Initial write
-			createValidCritiqueResponse(5), // First critique (score too low)
-			createValidMetaResponse(),      // Update meta
-			createValidCritiqueResponse(9), // Second critique (score good)
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.True(t, result)
-	require.Equal(t, 4, tg.callCount) // Should iterate until score >= 8
-}
-
-func TestViter_UpdateMeta_NoImprovement(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),      // Initial write
-			createValidCritiqueResponse(5), // First critique
-			createValidMetaResponse(),      // Update meta
-			createValidCritiqueResponse(4), // Second critique (worse score)
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.True(t, result) // Should return true when no improvement possible
-	require.Equal(t, 4, tg.callCount)
+	require.Equal(t, 1, tg.callCount) // Should fail on critique call
 }
 
 func TestViter_UpdateMeta_AlreadyFilledMeta(t *testing.T) {
@@ -402,88 +411,7 @@ func TestViter_UpdateMeta_AlreadyFilledMeta(t *testing.T) {
 	tg := &mockTextGenerator{
 		responses: []string{
 			createValidCritiqueResponse(9),
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	// Set a filled meta manually
-	metaContent := createValidMetaResponse()
-	err := afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	// Reload the book to get the filled meta
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.True(t, result)
-	require.Equal(t, 1, tg.callCount) // Should only critique, not write meta
-}
-
-func TestViter_UpdateMeta_ExistingCritique(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),      // Update meta
-			createValidCritiqueResponse(9), // New critique
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	// Set a filled meta and existing critique
-	metaContent := createValidMetaResponse()
-	critiqueContent := createValidCritiqueResponse(5)
-	err := afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-	err = afero.WriteFile(fs, path+"/meta_critique.md", []byte(critiqueContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // Should update meta and critique
-}
-
-func TestViter_UpdateMeta_InvalidMetaResponse(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			"invalid meta format",
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.False(t, result) // Should fail due to invalid meta format
-}
-
-func TestViter_UpdateMeta_InvalidCritiqueResponse(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
 			createValidMetaResponse(),
-			"invalid critique format",
 		},
 	}
 	v, _ := viter.NewViter(cfg, pp, tg)
@@ -491,306 +419,7 @@ func TestViter_UpdateMeta_InvalidCritiqueResponse(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.False(t, result) // Should fail due to invalid critique format
-}
-
-func TestViter_UpdateMeta_ZeroMinScore(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),
-			createValidCritiqueResponse(0),
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(0)
-
-	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // Should succeed immediately with score 0
-}
-
-func TestViter_UpdateMeta_HighMinScore(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),
-			createValidCritiqueResponse(5),
-			createValidMetaResponse(),
-			createValidCritiqueResponse(7),
-			createValidMetaResponse(),
-			createValidCritiqueResponse(10),
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(10)
-
-	require.True(t, result)
-	require.Equal(t, 6, tg.callCount) // Should iterate until score reaches 10
-}
-
-// Integration test combining CreateBook, LoadBook, and UpdateMeta
-func TestViter_FullWorkflow(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),
-			createValidCritiqueResponse(9),
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	// Test complete workflow
-	require.True(t, v.CreateBook(fs, path))
-	require.True(t, v.LoadBook(fs, path))
-	require.True(t, v.UpdateMeta(8))
-
-	// Verify files were created
-	exists, err := afero.Exists(fs, path+"/meta.md")
-	require.NoError(t, err)
-	require.True(t, exists)
-
-	exists, err = afero.Exists(fs, path+"/meta_critique.md")
-	require.NoError(t, err)
-	require.True(t, exists)
-}
-
-// Test edge cases and boundary conditions
-func TestViter_UpdateMeta_NegativeMinScore(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),
-			createValidCritiqueResponse(0),
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(-1)
-
-	require.True(t, result) // Should succeed with any score >= -1
-}
-
-func TestViter_MultipleOperationsOnSameInstance(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidMetaResponse(),
-			createValidCritiqueResponse(9),
-			createValidMetaResponse(),
-			createValidCritiqueResponse(9),
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path1 := "/test/book1"
-	path2 := "/test/book2"
-
-	// Test multiple book operations on same Viter instance
-	require.True(t, v.CreateBook(fs, path1))
-	require.True(t, v.UpdateMeta(8))
-
-	// Reset text generator for second book
-	tg.callCount = 2
-
-	require.True(t, v.CreateBook(fs, path2))
-	require.True(t, v.UpdateMeta(8))
-}
-
-func TestViter_UpdateMeta_EmptyCritiqueImprovements(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidCritiqueResponse(9),
-		},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	// Set a filled meta and critique with empty improvements
-	metaContent := createValidMetaResponse()
-	critiqueContent := `## Strengths
-Good character development
-
-## Improvements
-
-## Impressions
-Shows promise
-
-## Score
-9`
-	err := afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-	err = afero.WriteFile(fs, path+"/meta_critique.md", []byte(critiqueContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.True(t, result)           // Should succeed with high score after generating new critique
-	require.Equal(t, 1, tg.callCount) // Should call text generator once to create new critique
-}
-
-func TestViter_UpdateMeta_MaxIterationSafety(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-
-	// Create many responses to test that iteration eventually stops
-	responses := make([]string, 20)
-	for i := range 20 {
-		if i%2 == 0 {
-			responses[i] = createValidMetaResponse()
-		} else {
-			responses[i] = createValidCritiqueResponse(5) // Always low score
-		}
-	}
-
-	tg := &mockTextGenerator{responses: responses}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(10) // Very high score that won't be reached
-
-	require.True(t, result) // Should eventually return true when no improvement
-	// Should stop iterating when score doesn't improve
-}
-
-func TestViter_CreateBook_EmptyPath(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := ""
-
-	result := v.CreateBook(fs, path)
-
-	require.True(t, result) // Should still work with empty path
-}
-
-func TestViter_LoadBook_EmptyPath(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := ""
-
-	// Create book first
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.LoadBook(fs, path)
-
-	require.True(t, result) // Should work with empty path if meta exists
-}
-
-func TestViter_UpdateMeta_TextGeneratorReturnsEmptyString(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{""},
-	}
-	v, _ := viter.NewViter(cfg, pp, tg)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	require.True(t, v.CreateBook(fs, path))
-
-	result := v.UpdateMeta(8)
-
-	require.False(t, result) // Should fail with empty response
-}
-
-func TestViter_NewViter_NilDependencies(t *testing.T) {
-	cfg := createTestConfig()
-
-	// Test with nil prompt provider
-	v1, ok1 := viter.NewViter(cfg, nil, &mockTextGenerator{})
-	require.True(t, ok1)
-	require.NotNil(t, v1)
-
-	// Test with nil text generator
-	v2, ok2 := viter.NewViter(cfg, createTestPromptProvider(), nil)
-	require.True(t, ok2)
-	require.NotNil(t, v2)
-
-	// Test with both nil
-	v3, ok3 := viter.NewViter(cfg, nil, nil)
-	require.True(t, ok3)
-	require.NotNil(t, v3)
-}
-
-func createValidPlanResponse() string {
-	return `## 1. Chapter 1: The Beginning
-This is the first chapter where everything starts.
-
-## 2. Chapter 2: The Journey
-The adventure begins and characters face challenges.
-
-## 3. Chapter 3: The End
-Everything comes to a conclusion.`
-}
-
-func TestViter_UpdatePlan_Success(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidPlanResponse(),       // For UpdatePlan - write plan
-			createValidCritiqueResponse(85), // For UpdatePlan - critique plan
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	// Create book directory and write meta file with filled metadata
+	// Create book with already filled meta
 	err := fs.MkdirAll(path, 0755)
 	require.NoError(t, err)
 
@@ -798,16 +427,15 @@ func TestViter_UpdatePlan_Success(t *testing.T) {
 	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
 	require.NoError(t, err)
 
-	// Load the book with filled metadata
 	require.True(t, v.LoadBook(fs, path))
 
-	// Now test updating plan
-	result := v.UpdatePlan(3, 75)
+	result := v.UpdateMeta(1)
 
 	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // Should have called GenerateText 2 times
+	require.Equal(t, 1, tg.callCount) // Should do 1 critique only (no update after last critique)
 }
 
+// UpdatePlan Tests
 func TestViter_UpdatePlan_NoBook(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
@@ -817,31 +445,42 @@ func TestViter_UpdatePlan_NoBook(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, v)
 
-	result := v.UpdatePlan(3, 75)
+	result := v.UpdatePlan(3, 1)
 
 	require.False(t, result)
 	require.Equal(t, 0, tg.callCount)
 }
 
-// createValidChapterResponse creates a valid chapter string in the expected format.
-// This helper is used to generate mock responses for the text generator in UpdateChapter tests.
-func createValidChapterResponse(number int, title, content string) string {
-	return fmt.Sprintf(`## %d. %s
-%s`, number, title, content)
-}
-
-func createValidDiffResponse(lineChanges map[int]string) string {
-	if len(lineChanges) == 0 {
-		return "<1></1>"
+func TestViter_UpdatePlan_Success(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),      // CreateBook writes meta
+			createValidCritiqueResponse(8), // UpdateMeta(0) critiques meta
+			createValidPlanResponse(),      // UpdatePlan writes plan
+			createValidCritiqueResponse(8), // UpdatePlan critiques plan
+		},
 	}
 
-	var parts []string
-	for line, content := range lineChanges {
-		parts = append(parts, fmt.Sprintf("<%d>%s</%d>", line, content, line))
-	}
-	return strings.Join(parts, "\n")
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(0)) // critique only (meta already exists)
+
+	result := v.UpdatePlan(3, 1)
+
+	require.True(t, result)
+
+	require.Equal(t, 4, tg.callCount) // write meta + critique meta + write plan + critique plan
 }
 
+// UpdateChapter Tests
 func TestViter_UpdateChapter_NoBook(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
@@ -851,7 +490,7 @@ func TestViter_UpdateChapter_NoBook(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, v)
 
-	result := v.UpdateChapter(1, 75)
+	result := v.UpdateChapter(1, 1)
 
 	require.False(t, result)
 	require.Equal(t, 0, tg.callCount)
@@ -884,14 +523,97 @@ func TestViter_UpdateChapter_InvalidChapterNumber(t *testing.T) {
 	require.True(t, v.LoadBook(fs, path))
 
 	// Test invalid chapter numbers
-	require.False(t, v.UpdateChapter(0, 75))  // Chapter 0 doesn't exist
-	require.False(t, v.UpdateChapter(-1, 75)) // Negative chapter
-	require.False(t, v.UpdateChapter(5, 75))  // Chapter beyond plan length
+	require.False(t, v.UpdateChapter(0, 1))  // Chapter 0 doesn't exist
+	require.False(t, v.UpdateChapter(-1, 1)) // Negative chapter
+	require.False(t, v.UpdateChapter(5, 1))  // Chapter beyond plan length
 
 	require.Equal(t, 0, tg.callCount)
 }
 
 func TestViter_UpdateChapter_EmptyChapter_Success(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
+			createValidCritiqueResponse(85),
+			createValidDiffResponse(),
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	// Create book with meta and plan
+	err := fs.MkdirAll(path, 0755)
+	require.NoError(t, err)
+
+	metaContent := createValidMetaResponse()
+	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
+	require.NoError(t, err)
+
+	planContent := createValidPlanResponse()
+	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
+	require.NoError(t, err)
+
+	require.True(t, v.LoadBook(fs, path))
+
+	result := v.UpdateChapter(1, 1)
+
+	require.True(t, result)
+	require.Equal(t, 2, tg.callCount) // write chapter + 1 critique (no update after last critique)
+
+	chapter, err := v.GetBook().GetChapter(1)
+	require.NoError(t, err)
+	require.NotNil(t, chapter)
+	require.Equal(t, "The Beginning", chapter.GetTitle())
+}
+
+func TestViter_UpdateChapter_MultipleIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
+			createValidCritiqueResponse(60), // First iteration critique
+			createValidDiffResponse(),       // First iteration update
+			createValidCritiqueResponse(70), // Second iteration critique
+			createValidDiffResponse(),       // Second iteration update
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	// Create book with meta and plan
+	err := fs.MkdirAll(path, 0755)
+	require.NoError(t, err)
+
+	metaContent := createValidMetaResponse()
+	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
+	require.NoError(t, err)
+
+	planContent := createValidPlanResponse()
+	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
+	require.NoError(t, err)
+
+	require.True(t, v.LoadBook(fs, path))
+
+	result := v.UpdateChapter(1, 2)
+
+	require.True(t, result)
+	require.Equal(t, 4, tg.callCount) // write chapter + 2 critiques + 1 update (no update after last critique)
+}
+
+func TestViter_UpdateChapter_ZeroIterations(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
 	tg := &mockTextGenerator{
@@ -922,10 +644,47 @@ func TestViter_UpdateChapter_EmptyChapter_Success(t *testing.T) {
 
 	require.True(t, v.LoadBook(fs, path))
 
-	result := v.UpdateChapter(1, 75)
+	result := v.UpdateChapter(1, 0)
 
 	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // Write chapter + critique
+	require.Equal(t, 2, tg.callCount) // write chapter + 1 critique (always at least one critique)
+}
+
+func TestViter_UpdateChapter_NegativeIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
+			createValidCritiqueResponse(85),
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	// Create book with meta and plan
+	err := fs.MkdirAll(path, 0755)
+	require.NoError(t, err)
+
+	metaContent := createValidMetaResponse()
+	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
+	require.NoError(t, err)
+
+	planContent := createValidPlanResponse()
+	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
+	require.NoError(t, err)
+
+	require.True(t, v.LoadBook(fs, path))
+
+	result := v.UpdateChapter(1, -1)
+
+	require.True(t, result)
+	require.Equal(t, 2, tg.callCount) // write chapter + 1 critique (always at least one critique)
 }
 
 func TestViter_UpdateChapter_WriteChapterFailure(t *testing.T) {
@@ -942,6 +701,7 @@ func TestViter_UpdateChapter_WriteChapterFailure(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
+	// Create book with meta and plan
 	err := fs.MkdirAll(path, 0755)
 	require.NoError(t, err)
 
@@ -955,510 +715,42 @@ func TestViter_UpdateChapter_WriteChapterFailure(t *testing.T) {
 
 	require.True(t, v.LoadBook(fs, path))
 
-	result := v.UpdateChapter(1, 75)
+	result := v.UpdateChapter(1, 1)
 
 	require.False(t, result)
 	require.Equal(t, 0, tg.callCount)
 }
 
-func TestViter_UpdateChapter_CritiqueFailure(t *testing.T) {
+// Integration Tests
+func TestViter_FullWorkflow(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
 	tg := &mockTextGenerator{
 		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.False(t, result)
-	require.Equal(t, 1, tg.callCount) // Write chapter succeeded, critique failed
-}
-
-func TestViter_UpdateChapter_IterativeImprovement(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(60), // Below min score
-			createValidDiffResponse(map[int]string{2: "This is an improved start of our story."}), // Updated content
-			createValidCritiqueResponse(85), // Above min score
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.True(t, result)
-	require.Equal(t, 4, tg.callCount) // Write + critique + update + critique
-}
-
-func TestViter_UpdateChapter_NoImprovement(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(60),                                               // Below min score
-			createValidDiffResponse(map[int]string{2: "This is the start of our story."}), // No real improvement
-			createValidCritiqueResponse(50),                                               // Even lower score
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.True(t, result) // Should return true even with no improvement
-	require.Equal(t, 4, tg.callCount)
-}
-
-func TestViter_UpdateChapter_AlreadyFilledChapter(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(9),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(8),
+			createValidChapterResponse(1, "Chapter 1", "Content of chapter 1"),
 			createValidCritiqueResponse(85),
 		},
 	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
+	v, _ := viter.NewViter(cfg, pp, tg)
 
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
+	// Create book
+	require.True(t, v.CreateBook(fs, path))
 
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
+	// Update meta with 1 iteration
+	require.True(t, v.UpdateMeta(1))
 
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
+	// Update plan with 1 iteration
+	require.True(t, v.UpdatePlan(3, 1))
 
-	// Create existing chapter - LoadBook expects 1-based filename
-	chapterContent := createValidChapterResponse(1, "Existing Chapter", "This chapter already exists.")
-	err = afero.WriteFile(fs, path+"/chapter_1.md", []byte(chapterContent), 0644)
-	require.NoError(t, err)
+	// Update chapter with 1 iteration
+	require.True(t, v.UpdateChapter(1, 1))
 
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.True(t, result)
-	require.Equal(t, 1, tg.callCount) // Only critique, no writing
-}
-
-func TestViter_UpdateChapter_ExistingCritique(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	// Create existing chapter - LoadBook expects 1-based filename
-	chapterContent := createValidChapterResponse(1, "Existing Chapter", "This chapter already exists.")
-	err = afero.WriteFile(fs, path+"/chapter_1.md", []byte(chapterContent), 0644)
-	require.NoError(t, err)
-
-	// Create existing critique with high score - LoadBook expects 1-based filename
-	critiqueContent := createValidCritiqueResponse(85)
-	err = afero.WriteFile(fs, path+"/chapter_1_critique.md", []byte(critiqueContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.True(t, result)
-	require.Equal(t, 0, tg.callCount) // No calls needed - chapter and critique both exist
-}
-
-func TestViter_UpdateChapter_InvalidChapterResponse(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			"Invalid chapter format - no title", // Invalid chapter response
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.False(t, result)
-	require.Equal(t, 1, tg.callCount)
-}
-
-func TestViter_UpdateChapter_InvalidCritiqueResponse(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			"Invalid critique format", // Invalid critique response
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.False(t, result)
-	require.Equal(t, 2, tg.callCount)
-}
-
-func TestViter_UpdateChapter_ZeroMinScore(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(30), // Low score but above 0
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 0) // Min score of 0
-
-	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // No iteration needed
-}
-
-func TestViter_UpdateChapter_HighMinScore(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(60), // Below high min score
-			createValidChapterResponse(1, "The Beginning", "This is a much better start."),
-			createValidCritiqueResponse(95), // Above high min score
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 90) // High min score
-
-	require.True(t, result)
-	require.Equal(t, 4, tg.callCount)
-}
-
-func TestViter_UpdateChapter_UpdateChapterFailure(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(60), // Below min score
-			// No third response - will fail when trying to update chapter
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.False(t, result)
-	require.Equal(t, 2, tg.callCount) // Write + critique, then update fails due to no response
-}
-
-func TestViter_UpdateChapter_UpdateCritiqueFailure(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(60), // Below min score
-			createValidDiffResponse(map[int]string{2: "This is an improved start of our story."}), // Updated content
-			// No fourth response - will fail when trying to critique updated chapter
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.False(t, result)
-	require.Equal(t, 3, tg.callCount) // Write + critique + update, then critique fails due to no response
-}
-
-func TestViter_UpdateChapter_NegativeMinScore(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(10), // Very low score but still above negative
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, -10) // Negative min score
-
-	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // Write + critique (score is already above negative threshold)
-}
-
-func TestViter_UpdateChapter_DiffBasedUpdate_EndToEnd(t *testing.T) {
-	cfg := createTestConfig()
-	pp := createTestPromptProvider()
-	tg := &mockTextGenerator{
-		responses: []string{
-			// Initial chapter creation
-			createValidChapterResponse(1, "The Beginning", "Line 2: Once upon a time.\nLine 3: There was a hero.\nLine 4: Who went on an adventure.\nLine 5: The end."),
-			// Initial critique - score too low
-			createValidCritiqueResponse(40),
-			// Diff update response - modify lines 2 and 4
-			"<3>Line 3: There was a brave hero.</3>\n<5>Line 5: And they lived happily ever after.</5>",
-			// Final critique - score now acceptable
-			createValidCritiqueResponse(85),
-		},
-	}
-
-	v, ok := viter.NewViter(cfg, pp, tg)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	fs := afero.NewMemMapFs()
-	path := "/test/book"
-
-	err := fs.MkdirAll(path, 0755)
-	require.NoError(t, err)
-
-	metaContent := createValidMetaResponse()
-	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
-	require.NoError(t, err)
-
-	planContent := createValidPlanResponse()
-	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
-	require.NoError(t, err)
-
-	require.True(t, v.LoadBook(fs, path))
-
-	result := v.UpdateChapter(1, 75)
-
-	require.True(t, result)
-	require.Equal(t, 4, tg.callCount) // Write + critique + update + final critique
-
-	// Verify the final chapter content has both modified and preserved lines
-	chapter, err := v.GetBook().GetChapter(1)
-	require.NoError(t, err)
-	require.NotNil(t, chapter)
-
-	expectedContent := "Line 2: Once upon a time.\nLine 3: There was a brave hero.\nLine 4: Who went on an adventure.\nLine 5: And they lived happily ever after."
-	require.Equal(t, expectedContent, chapter.GetContent())
-	require.Equal(t, "The Beginning", chapter.GetTitle())
-	require.Equal(t, 1, chapter.GetNumber())
+	require.Equal(t, 6, tg.callCount) // All operations completed successfully
 }

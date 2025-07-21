@@ -17,7 +17,7 @@ func main() {
 	var configPath string
 	var debug bool
 	var create, meta bool
-	var plan, chapter, score int
+	var plan, chapter, iterCount int
 	var help bool
 
 	flag.StringVar(&path, "path", ".", "Path to the book directory")
@@ -28,7 +28,7 @@ func main() {
 	flag.BoolVar(&meta, "meta", false, "Update book metadata")
 	flag.IntVar(&plan, "plan", 0, "Update book plan with given count of chapters")
 	flag.IntVar(&chapter, "chapter", 0, "Update chapter with given number")
-	flag.IntVar(&score, "score", 99, "Target score of the book")
+	flag.IntVar(&iterCount, "iter", 5, "Update given number of times")
 	flag.BoolVar(&help, "help", false, "Print the help message")
 	flag.Parse()
 
@@ -96,21 +96,21 @@ func main() {
 	}
 
 	if meta {
-		ok = v.UpdateMeta(score)
+		ok = v.UpdateMeta(iterCount)
 		if !ok {
 			return
 		}
 	}
 
 	if plan > 0 {
-		ok = v.UpdatePlan(plan, score)
+		ok = v.UpdatePlan(plan, iterCount)
 		if !ok {
 			return
 		}
 	}
 
 	if chapter > 0 {
-		ok = v.UpdateChapter(chapter, score)
+		ok = v.UpdateChapter(chapter, iterCount)
 		if !ok {
 			return
 		}
@@ -138,8 +138,8 @@ func printHelp() {
 	fmt.Println("        Update book plan with given count of chapters")
 	fmt.Println("  -chapter int")
 	fmt.Println("        Update chapter with given number")
-	fmt.Println("  -score int")
-	fmt.Println("        Target score of the book")
+	fmt.Println("  -iter int")
+	fmt.Println("        Update given number of times (default 5)")
 	fmt.Println("  -debug")
 	fmt.Println("        Enable debug mode")
 	fmt.Println("  -help")
