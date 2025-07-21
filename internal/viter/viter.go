@@ -17,6 +17,7 @@ type PromptProvider interface {
 	UpdatePlanPrompt() string
 	WriteChapterPrompt() string
 	CritiqueChapterPrompt() string
+	UpdateChapterPrompt() string
 	WriteNChapterPrompt(chapter int) string
 	CritiqueNChapterPrompt(chapter int) string
 	UpdateNChapterPrompt(chapter int) string
@@ -71,6 +72,10 @@ func (v *Viter) LoadBook(fs afero.Fs, path string) bool {
 	v.log.Infow("loaded book", "path", path)
 
 	return true
+}
+
+func (v *Viter) GetBook() *books.Book {
+	return v.book
 }
 
 func (v *Viter) UpdateMeta(minScore int) bool {
@@ -519,11 +524,12 @@ func (v *Viter) critiqueChapter(chapter *books.Chapter) (*books.Critique, bool) 
 func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*books.Chapter, bool) {
 	v.log.Infow("updating chapter", "n", prevChp.GetNumber())
 
-	messages := make([]llms.MessageContent, 4)
+	prevDiff := books.DiffFromText(prevChp.String())
+	messages := make([]llms.MessageContent, 2)
 	messages[0] = llms.MessageContent{
 		Role: llms.ChatMessageTypeSystem,
 		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.WriteChapterPrompt()),
+			llms.TextPart(v.pp.UpdateChapterPrompt()),
 		},
 	}
 	messages[1] = llms.MessageContent{
@@ -541,27 +547,23 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*bo
 		}
 		messages[1].Parts = append(messages[1].Parts, llms.TextPart(chp.String()))
 	}
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.WriteNChapterPrompt(prevChp.GetNumber())))
-	messages[2] = llms.MessageContent{
-		Role: llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{
-			llms.TextPart(prevChp.String()),
-		},
-	}
-	messages[3] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.UpdateNChapterPrompt(prevChp.GetNumber())),
-			llms.TextPart(crit.GetImprovements()),
-		},
-	}
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(prevDiff.String()))
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.UpdateNChapterPrompt(prevChp.GetNumber())))
+	messages[1].Parts = append(messages[1].Parts, llms.TextPart(crit.GetImprovements()))
 
-	chapterData, ok := v.tg.GenerateText(messages)
+	diffData, ok := v.tg.GenerateText(messages)
 	if !ok {
 		return nil, false
 	}
 
-	chp, err := books.ChapterFromString(chapterData)
+	diff, err := books.DiffFromString(diffData)
+	if err != nil {
+		v.log.Warnw(err.Error())
+		return nil, false
+	}
+	prevDiff.Merge(diff)
+
+	chp, err := books.ChapterFromString(prevDiff.Text())
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false

@@ -3,6 +3,7 @@ package viter_test
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"viter/internal/neural"
@@ -23,6 +24,7 @@ type mockPromptProvider struct {
 	updatePlanPrompt       string
 	writeChapterPrompt     string
 	critiqueChapterPrompt  string
+	updateChapterPrompt    string
 	writeNChapterPrompt    string
 	critiqueNChapterPrompt string
 	updateNChapterPrompt   string
@@ -58,6 +60,10 @@ func (m *mockPromptProvider) WriteChapterPrompt() string {
 
 func (m *mockPromptProvider) CritiqueChapterPrompt() string {
 	return m.critiqueChapterPrompt
+}
+
+func (m *mockPromptProvider) UpdateChapterPrompt() string {
+	return m.updateChapterPrompt
 }
 
 func (m *mockPromptProvider) WriteNChapterPrompt(chapter int) string {
@@ -116,6 +122,7 @@ func createTestPromptProvider() *mockPromptProvider {
 		updatePlanPrompt:       "Update plan prompt",
 		writeChapterPrompt:     "Write chapter prompt",
 		critiqueChapterPrompt:  "Critique chapter prompt",
+		updateChapterPrompt:    "Update chapter prompt",
 		writeNChapterPrompt:    "Write chapter %d prompt",
 		critiqueNChapterPrompt: "Critique chapter %d prompt",
 		updateNChapterPrompt:   "Update chapter %d prompt",
@@ -823,6 +830,18 @@ func createValidChapterResponse(number int, title, content string) string {
 %s`, number, title, content)
 }
 
+func createValidDiffResponse(lineChanges map[int]string) string {
+	if len(lineChanges) == 0 {
+		return "<1></1>"
+	}
+
+	var parts []string
+	for line, content := range lineChanges {
+		parts = append(parts, fmt.Sprintf("<%d>%s</%d>", line, content, line))
+	}
+	return strings.Join(parts, "\n")
+}
+
 func TestViter_UpdateChapter_NoBook(t *testing.T) {
 	cfg := createTestConfig()
 	pp := createTestPromptProvider()
@@ -984,7 +1003,7 @@ func TestViter_UpdateChapter_IterativeImprovement(t *testing.T) {
 		responses: []string{
 			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
 			createValidCritiqueResponse(60), // Below min score
-			createValidChapterResponse(1, "The Beginning", "This is an improved start of our story."),
+			createValidDiffResponse(map[int]string{2: "This is an improved start of our story."}), // Updated content
 			createValidCritiqueResponse(85), // Above min score
 		},
 	}
@@ -1021,9 +1040,9 @@ func TestViter_UpdateChapter_NoImprovement(t *testing.T) {
 	tg := &mockTextGenerator{
 		responses: []string{
 			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-			createValidCritiqueResponse(60), // Below min score
-			createValidChapterResponse(1, "The Beginning", "This is the same quality story."),
-			createValidCritiqueResponse(60), // Same score - no improvement
+			createValidCritiqueResponse(60),                                               // Below min score
+			createValidDiffResponse(map[int]string{2: "This is the start of our story."}), // No real improvement
+			createValidCritiqueResponse(50),                                               // Even lower score
 		},
 	}
 
@@ -1288,6 +1307,7 @@ func TestViter_UpdateChapter_UpdateChapterFailure(t *testing.T) {
 		responses: []string{
 			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
 			createValidCritiqueResponse(60), // Below min score
+			// No third response - will fail when trying to update chapter
 		},
 	}
 
@@ -1311,16 +1331,10 @@ func TestViter_UpdateChapter_UpdateChapterFailure(t *testing.T) {
 
 	require.True(t, v.LoadBook(fs, path))
 
-	// Limit responses so it fails on the third call (update chapter)
-	tg.responses = []string{
-		createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-		createValidCritiqueResponse(60),
-	}
-
 	result := v.UpdateChapter(1, 75)
 
 	require.False(t, result)
-	require.Equal(t, 2, tg.callCount) // Write + critique, then update fails
+	require.Equal(t, 2, tg.callCount) // Write + critique, then update fails due to no response
 }
 
 func TestViter_UpdateChapter_UpdateCritiqueFailure(t *testing.T) {
@@ -1330,7 +1344,8 @@ func TestViter_UpdateChapter_UpdateCritiqueFailure(t *testing.T) {
 		responses: []string{
 			createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
 			createValidCritiqueResponse(60), // Below min score
-			createValidChapterResponse(1, "The Beginning", "This is an improved start."),
+			createValidDiffResponse(map[int]string{2: "This is an improved start of our story."}), // Updated content
+			// No fourth response - will fail when trying to critique updated chapter
 		},
 	}
 
@@ -1354,17 +1369,10 @@ func TestViter_UpdateChapter_UpdateCritiqueFailure(t *testing.T) {
 
 	require.True(t, v.LoadBook(fs, path))
 
-	// Limit responses so it fails on the fourth call (critique after update)
-	tg.responses = []string{
-		createValidChapterResponse(1, "The Beginning", "This is the start of our story."),
-		createValidCritiqueResponse(60),
-		createValidChapterResponse(1, "The Beginning", "This is an improved start."),
-	}
-
 	result := v.UpdateChapter(1, 75)
 
 	require.False(t, result)
-	require.Equal(t, 3, tg.callCount) // Write + critique + update, then critique fails
+	require.Equal(t, 3, tg.callCount) // Write + critique + update, then critique fails due to no response
 }
 
 func TestViter_UpdateChapter_NegativeMinScore(t *testing.T) {
@@ -1397,8 +1405,60 @@ func TestViter_UpdateChapter_NegativeMinScore(t *testing.T) {
 
 	require.True(t, v.LoadBook(fs, path))
 
-	result := v.UpdateChapter(1, -5) // Negative min score
+	result := v.UpdateChapter(1, -10) // Negative min score
 
 	require.True(t, result)
-	require.Equal(t, 2, tg.callCount) // No iteration needed
+	require.Equal(t, 2, tg.callCount) // Write + critique (score is already above negative threshold)
+}
+
+func TestViter_UpdateChapter_DiffBasedUpdate_EndToEnd(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			// Initial chapter creation
+			createValidChapterResponse(1, "The Beginning", "Line 2: Once upon a time.\nLine 3: There was a hero.\nLine 4: Who went on an adventure.\nLine 5: The end."),
+			// Initial critique - score too low
+			createValidCritiqueResponse(40),
+			// Diff update response - modify lines 2 and 4
+			"<3>Line 3: There was a brave hero.</3>\n<5>Line 5: And they lived happily ever after.</5>",
+			// Final critique - score now acceptable
+			createValidCritiqueResponse(85),
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	err := fs.MkdirAll(path, 0755)
+	require.NoError(t, err)
+
+	metaContent := createValidMetaResponse()
+	err = afero.WriteFile(fs, path+"/meta.md", []byte(metaContent), 0644)
+	require.NoError(t, err)
+
+	planContent := createValidPlanResponse()
+	err = afero.WriteFile(fs, path+"/plan.md", []byte(planContent), 0644)
+	require.NoError(t, err)
+
+	require.True(t, v.LoadBook(fs, path))
+
+	result := v.UpdateChapter(1, 75)
+
+	require.True(t, result)
+	require.Equal(t, 4, tg.callCount) // Write + critique + update + final critique
+
+	// Verify the final chapter content has both modified and preserved lines
+	chapter, err := v.GetBook().GetChapter(1)
+	require.NoError(t, err)
+	require.NotNil(t, chapter)
+
+	expectedContent := "Line 2: Once upon a time.\nLine 3: There was a brave hero.\nLine 4: Who went on an adventure.\nLine 5: And they lived happily ever after."
+	require.Equal(t, expectedContent, chapter.GetContent())
+	require.Equal(t, "The Beginning", chapter.GetTitle())
+	require.Equal(t, 1, chapter.GetNumber())
 }
