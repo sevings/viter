@@ -16,7 +16,7 @@ func main() {
 	var path, lang string
 	var configPath string
 	var debug bool
-	var create, meta bool
+	var create, meta, chapters bool
 	var plan, chapter, iterCount int
 	var help bool
 
@@ -28,6 +28,7 @@ func main() {
 	flag.BoolVar(&meta, "meta", false, "Update book metadata")
 	flag.IntVar(&plan, "plan", 0, "Update book plan with given count of chapters")
 	flag.IntVar(&chapter, "chapter", 0, "Update chapter with given number")
+	flag.BoolVar(&chapters, "chapters", false, "Update all book chapters")
 	flag.IntVar(&iterCount, "iter", 5, "Update given number of times")
 	flag.BoolVar(&help, "help", false, "Print the help message")
 	flag.Parse()
@@ -37,7 +38,7 @@ func main() {
 		return
 	}
 
-	if !create && !meta && plan == 0 && chapter == 0 {
+	if !create && !meta && !chapters && plan == 0 && chapter == 0 {
 		printHelp()
 		return
 	}
@@ -115,6 +116,13 @@ func main() {
 			return
 		}
 	}
+
+	if chapters {
+		ok = v.UpdateAllChapters(iterCount)
+		if !ok {
+			return
+		}
+	}
 }
 
 func printHelp() {
@@ -138,6 +146,8 @@ func printHelp() {
 	fmt.Println("        Update book plan with given count of chapters")
 	fmt.Println("  -chapter int")
 	fmt.Println("        Update chapter with given number")
+	fmt.Println("  -chapters")
+	fmt.Println("        Update all book chapters")
 	fmt.Println("  -iter int")
 	fmt.Println("        Update given number of times (default 5)")
 	fmt.Println("  -debug")

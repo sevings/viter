@@ -179,6 +179,20 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 	}
 }
 
+func (v *Viter) UpdateAllChapters(iterCount int) bool {
+	if v.book == nil || v.book.GetPlan() == nil {
+		return false
+	}
+
+	for i := 1; i <= v.book.GetPlan().Count(); i++ {
+		if !v.UpdateChapter(i, iterCount) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
 	v.log.Infow("writing meta")
 
