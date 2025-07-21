@@ -1,4 +1,4 @@
-package viter
+package books
 
 import (
 	"errors"

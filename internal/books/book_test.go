@@ -1,4 +1,4 @@
-package viter_test
+package books_test
 
 import (
 	"path/filepath"
@@ -7,14 +7,14 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
-	"viter/internal/viter"
+	"viter/internal/books"
 )
 
 func TestCreateBook(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 	require.NotNil(t, book)
 
@@ -110,7 +110,7 @@ The chapter plan provides a good structure for the story arc.
 	require.NoError(t, err)
 
 	// Load the book
-	book, err := viter.LoadBook(fs, path)
+	book, err := books.LoadBook(fs, path)
 	require.NoError(t, err)
 	require.NotNil(t, book)
 
@@ -160,9 +160,9 @@ func TestLoadBookNonExistent(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/nonexistent/book"
 
-	book, err := viter.LoadBook(fs, path)
+	book, err := books.LoadBook(fs, path)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrNoMetaFile, err)
+	require.Equal(t, books.ErrNoMetaFile, err)
 	require.Nil(t, book)
 }
 
@@ -170,16 +170,16 @@ func TestBookSave(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set metadata
-	meta := &viter.BookMeta{}
+	meta := &books.BookMeta{}
 	meta.SetStyle("Science Fiction")
 	meta.SetGenres([]string{"Sci-Fi", "Thriller"})
 	meta.SetWorld("A dystopian future")
-	meta.SetProtagonists([]viter.Character{
-		viter.NewCharacter("Alex", "A rebel hacker"),
+	meta.SetProtagonists([]books.Character{
+		books.NewCharacter("Alex", "A rebel hacker"),
 	})
 	meta.SetPlot("The fight against a totalitarian regime")
 
@@ -187,9 +187,9 @@ func TestBookSave(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set plan
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1: The Resistance", "Alex joins the underground"),
-		viter.NewChapter(2, "Chapter 2: The Mission", "The first strike against the system"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1: The Resistance", "Alex joins the underground"),
+		books.NewChapter(2, "Chapter 2: The Mission", "The first strike against the system"),
 	}
 
 	err = book.SetPlan(plan)
@@ -224,19 +224,19 @@ func TestSaveChapter(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan first
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Save a chapter
-	chapter := viter.NewChapter(1, "Chapter 1: The Beginning", "It was a dark and stormy night...")
+	chapter := books.NewChapter(1, "Chapter 1: The Beginning", "It was a dark and stormy night...")
 	err = book.SetChapter(1, chapter)
 	require.NoError(t, err)
 
@@ -257,41 +257,41 @@ func TestSaveChapterInvalidIndex(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 2 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
-	chapter := viter.NewChapter(0, "Invalid Chapter", "This shouldn't work")
+	chapter := books.NewChapter(0, "Invalid Chapter", "This shouldn't work")
 
 	// Test negative index
 	err = book.SetChapter(-1, chapter)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	// Test index too high
 	err = book.SetChapter(3, chapter)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 }
 
 func TestGetPlanChapter(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter content"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter content"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter content"),
+		books.NewChapter(2, "Chapter 2", "Second chapter content"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
@@ -310,11 +310,11 @@ func TestGetPlanChapter(t *testing.T) {
 	// Test invalid indices
 	_, err = book.GetPlanChapter(0)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	_, err = book.GetPlanChapter(3)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 }
 
 func TestMetaFromString(t *testing.T) {
@@ -354,7 +354,7 @@ An ancient evil stirs, threatening to destroy the delicate balance of magic in t
 ## Title
 The Chronicles of Lyra`
 
-	meta, err := viter.MetaFromString(metaStr)
+	meta, err := books.MetaFromString(metaStr)
 	require.NoError(t, err)
 
 	require.Equal(t, "The Chronicles of Lyra", meta.GetTitle())
@@ -385,21 +385,21 @@ The Chronicles of Lyra`
 }
 
 func TestMetaString(t *testing.T) {
-	meta := viter.BookMeta{}
+	meta := books.BookMeta{}
 	meta.SetTitle("Blood and Badges")
 	meta.SetStyle("Urban Fantasy")
 	meta.SetGenres([]string{"Fantasy", "Mystery", "Urban"})
 	meta.SetLogline("When the supernatural meets police procedure, unlikely alliances form.")
 	meta.SetWorld("Modern city with hidden supernatural elements")
-	meta.SetProtagonists([]viter.Character{
-		viter.NewCharacter("Detective Sarah", "A cop who discovers the supernatural"),
-		viter.NewCharacter("Marcus", "A vampire trying to solve his own murder"),
+	meta.SetProtagonists([]books.Character{
+		books.NewCharacter("Detective Sarah", "A cop who discovers the supernatural"),
+		books.NewCharacter("Marcus", "A vampire trying to solve his own murder"),
 	})
-	meta.SetMinorCharacters([]viter.Character{
-		viter.NewCharacter("Chief Williams", "Sarah's skeptical boss"),
+	meta.SetMinorCharacters([]books.Character{
+		books.NewCharacter("Chief Williams", "Sarah's skeptical boss"),
 	})
-	meta.SetAntagonists([]viter.Character{
-		viter.NewCharacter("The Syndicate Leader", "A powerful vampire controlling the city's underworld"),
+	meta.SetAntagonists([]books.Character{
+		books.NewCharacter("The Syndicate Leader", "A powerful vampire controlling the city's underworld"),
 	})
 	meta.SetPlot("A detective and vampire must work together to solve supernatural crimes")
 
@@ -432,7 +432,7 @@ Sarah stared at the crime scene, her coffee growing cold in her hands. The victi
 
 "This doesn't make sense," she muttered to herself.`
 
-	chapter, err := viter.ChapterFromString(chapterStr)
+	chapter, err := books.ChapterFromString(chapterStr)
 	require.NoError(t, err)
 	require.Equal(t, "Chapter 1: The Discovery", chapter.GetTitle())
 	require.Contains(t, chapter.GetContent(), "Sarah stared at the crime scene")
@@ -440,20 +440,20 @@ Sarah stared at the crime scene, her coffee growing cold in her hands. The victi
 }
 
 func TestChapterFromStringEmpty(t *testing.T) {
-	_, err := viter.ChapterFromString("")
+	_, err := books.ChapterFromString("")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "empty chapter string")
 }
 
 func TestChapterFromStringNoTitle(t *testing.T) {
 	chapterStr := `This is just content without a title`
-	_, err := viter.ChapterFromString(chapterStr)
+	_, err := books.ChapterFromString(chapterStr)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no title found")
 }
 
 func TestChapterString(t *testing.T) {
-	chapter := viter.NewChapter(5, "Chapter 5: The Revelation", "Everything became clear in that moment. The pieces of the puzzle finally fit together.")
+	chapter := books.NewChapter(5, "Chapter 5: The Revelation", "Everything became clear in that moment. The pieces of the puzzle finally fit together.")
 
 	result := chapter.String()
 	require.Equal(t, "## 5. Chapter 5: The Revelation\nEverything became clear in that moment. The pieces of the puzzle finally fit together.", result)
@@ -469,7 +469,7 @@ The first major obstacle appears
 ## Chapter 3: The Resolution
 Everything comes together in the end`
 
-	plan, err := viter.PlanFromString(planStr)
+	plan, err := books.PlanFromString(planStr)
 	require.NoError(t, err)
 	require.Len(t, plan, 3)
 
@@ -484,15 +484,15 @@ Everything comes together in the end`
 }
 
 func TestPlanFromStringEmpty(t *testing.T) {
-	plan, err := viter.PlanFromString("")
+	plan, err := books.PlanFromString("")
 	require.NoError(t, err)
 	require.Empty(t, plan)
 }
 
 func TestPlanString(t *testing.T) {
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 
 	result := plan.String()
@@ -501,25 +501,25 @@ func TestPlanString(t *testing.T) {
 }
 
 func TestPlanStringEmpty(t *testing.T) {
-	plan := viter.Plan{}
+	plan := books.Plan{}
 	result := plan.String()
 	require.Empty(t, result)
 }
 
 func TestRoundTripMetadata(t *testing.T) {
 	// Create original metadata
-	original := viter.BookMeta{}
+	original := books.BookMeta{}
 	original.SetStyle("Space Opera")
 	original.SetGenres([]string{"Science Fiction", "Adventure"})
 	original.SetWorld("A galaxy far, far away")
-	original.SetProtagonists([]viter.Character{
-		viter.NewCharacter("Captain Nova", "A fearless space explorer"),
+	original.SetProtagonists([]books.Character{
+		books.NewCharacter("Captain Nova", "A fearless space explorer"),
 	})
 	original.SetPlot("The quest to save the galaxy")
 
 	// Convert to string and back
 	str := original.String()
-	parsed, err := viter.MetaFromString(str)
+	parsed, err := books.MetaFromString(str)
 	require.NoError(t, err)
 
 	// Verify all data is preserved
@@ -532,11 +532,11 @@ func TestRoundTripMetadata(t *testing.T) {
 }
 
 func TestRoundTripChapter(t *testing.T) {
-	original := viter.NewChapter(42, "Chapter 42: The Answer", "The answer to life, the universe, and everything is 42.")
+	original := books.NewChapter(42, "Chapter 42: The Answer", "The answer to life, the universe, and everything is 42.")
 
 	// Convert to string and back
 	str := original.String()
-	parsed, err := viter.ChapterFromString(str)
+	parsed, err := books.ChapterFromString(str)
 	require.NoError(t, err)
 
 	// Verify all data is preserved
@@ -546,15 +546,15 @@ func TestRoundTripChapter(t *testing.T) {
 }
 
 func TestRoundTripPlan(t *testing.T) {
-	original := viter.Plan{
-		viter.NewChapter(0, "Prologue", "The story begins"),
-		viter.NewChapter(1, "Chapter 1", "The adventure starts"),
-		viter.NewChapter(0, "Epilogue", "The story ends"),
+	original := books.Plan{
+		books.NewChapter(0, "Prologue", "The story begins"),
+		books.NewChapter(1, "Chapter 1", "The adventure starts"),
+		books.NewChapter(0, "Epilogue", "The story ends"),
 	}
 
 	// Convert to string and back
 	str := original.String()
-	parsed, err := viter.PlanFromString(str)
+	parsed, err := books.PlanFromString(str)
 	require.NoError(t, err)
 
 	// Verify all data is preserved
@@ -570,25 +570,25 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	path := "/test/integration"
 
 	// Create and configure a book
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up complete metadata
-	meta := &viter.BookMeta{}
+	meta := &books.BookMeta{}
 	meta.SetTitle("Shadows of Millbrook")
 	meta.SetStyle("Horror")
 	meta.SetGenres([]string{"Horror", "Thriller", "Supernatural"})
 	meta.SetLogline("In a town where the dead don't rest, the living must face their darkest fears.")
 	meta.SetWorld("A small town with dark secrets")
-	meta.SetProtagonists([]viter.Character{
-		viter.NewCharacter("Dr. Emma Carter", "A psychiatrist who uncovers the truth"),
-		viter.NewCharacter("Father Miguel", "A priest battling ancient evils"),
+	meta.SetProtagonists([]books.Character{
+		books.NewCharacter("Dr. Emma Carter", "A psychiatrist who uncovers the truth"),
+		books.NewCharacter("Father Miguel", "A priest battling ancient evils"),
 	})
-	meta.SetMinorCharacters([]viter.Character{
-		viter.NewCharacter("Sheriff Brooks", "The local law enforcement"),
+	meta.SetMinorCharacters([]books.Character{
+		books.NewCharacter("Sheriff Brooks", "The local law enforcement"),
 	})
-	meta.SetAntagonists([]viter.Character{
-		viter.NewCharacter("The Hollow Man", "An ancient spirit seeking revenge"),
+	meta.SetAntagonists([]books.Character{
+		books.NewCharacter("The Hollow Man", "An ancient spirit seeking revenge"),
 	})
 	meta.SetPlot("A town's buried secrets come back to haunt the living")
 
@@ -596,17 +596,17 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up a plan
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1: Arrival", "Dr. Carter arrives in the small town"),
-		viter.NewChapter(2, "Chapter 2: Strange Occurrences", "Mysterious events begin to unfold"),
-		viter.NewChapter(3, "Chapter 3: The Truth", "The dark history is revealed"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1: Arrival", "Dr. Carter arrives in the small town"),
+		books.NewChapter(2, "Chapter 2: Strange Occurrences", "Mysterious events begin to unfold"),
+		books.NewChapter(3, "Chapter 3: The Truth", "The dark history is revealed"),
 	}
 
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Set up critiques
-	metaCrit := &viter.Critique{
+	metaCrit := &books.Critique{
 		Strengths:    "Well-developed characters",
 		Improvements: "Need more horror elements",
 		Impressions:  "The horror elements are well-balanced with character development.",
@@ -615,7 +615,7 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	err = book.SetMetaCrit(metaCrit)
 	require.NoError(t, err)
 
-	planCrit := &viter.Critique{
+	planCrit := &books.Critique{
 		Strengths:    "Good pacing",
 		Improvements: "More detailed chapter outlines",
 		Impressions:  "The three-act structure provides good pacing for building tension.",
@@ -629,12 +629,12 @@ func TestIntegrationSaveAndLoad(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save individual chapters
-	fullChapter1 := viter.NewChapter(1, "Chapter 1: Arrival - The Beginning", "Dr. Emma Carter stepped off the bus into the dusty main street of Millbrook. The town seemed ordinary enough, but something in the air made her skin crawl.")
+	fullChapter1 := books.NewChapter(1, "Chapter 1: Arrival - The Beginning", "Dr. Emma Carter stepped off the bus into the dusty main street of Millbrook. The town seemed ordinary enough, but something in the air made her skin crawl.")
 	err = book.SetChapter(1, fullChapter1)
 	require.NoError(t, err)
 
 	// Load the book fresh
-	loadedBook, err := viter.LoadBook(fs, path)
+	loadedBook, err := books.LoadBook(fs, path)
 	require.NoError(t, err)
 
 	// Verify metadata was preserved
@@ -698,11 +698,11 @@ func TestBookMetaCritGettersSetters(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Test meta critique
-	metaCrit := &viter.Critique{
+	metaCrit := &books.Critique{
 		Strengths:    "Good foundation",
 		Improvements: "More detail needed",
 		Impressions:  "This is a meta critique for testing purposes.",
@@ -713,7 +713,7 @@ func TestBookMetaCritGettersSetters(t *testing.T) {
 	require.Equal(t, metaCrit, book.GetMetaCrit())
 
 	// Test plan critique
-	planCrit := &viter.Critique{
+	planCrit := &books.Critique{
 		Strengths:    "Clear structure",
 		Improvements: "Better pacing",
 		Impressions:  "This is a plan critique for testing purposes.",
@@ -738,17 +738,17 @@ func TestRoundTripCritiques(t *testing.T) {
 	path := "/test/critique"
 
 	// Create book
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set critiques
-	metaCrit := &viter.Critique{
+	metaCrit := &books.Critique{
 		Strengths:    "Good concept",
 		Improvements: "More character development",
 		Impressions:  "The metadata needs more character development details.",
 		Score:        6,
 	}
-	planCrit := &viter.Critique{
+	planCrit := &books.Critique{
 		Strengths:    "Good structure",
 		Improvements: "More detailed outlines",
 		Impressions:  "The chapter structure could benefit from more detailed outlines.",
@@ -762,7 +762,7 @@ func TestRoundTripCritiques(t *testing.T) {
 	require.NoError(t, err)
 
 	// Load fresh book and verify critiques persist
-	loadedBook, err := viter.LoadBook(fs, path)
+	loadedBook, err := books.LoadBook(fs, path)
 	require.NoError(t, err)
 
 	require.Equal(t, metaCrit, loadedBook.GetMetaCrit())
@@ -770,11 +770,11 @@ func TestRoundTripCritiques(t *testing.T) {
 }
 
 func TestChapterGetNumber(t *testing.T) {
-	chapter := viter.NewChapter(42, "Test Chapter", "Test content")
+	chapter := books.NewChapter(42, "Test Chapter", "Test content")
 	require.Equal(t, 42, chapter.GetNumber())
 
 	// Test chapter with number 0
-	chapterZero := viter.NewChapter(0, "Prologue", "Beginning")
+	chapterZero := books.NewChapter(0, "Prologue", "Beginning")
 	require.Equal(t, 0, chapterZero.GetNumber())
 }
 
@@ -783,7 +783,7 @@ func TestChapterFromStringWithNumber(t *testing.T) {
 	chapterStr := `## 5. The Final Confrontation
 The hero faces the ultimate challenge.`
 
-	chapter, err := viter.ChapterFromString(chapterStr)
+	chapter, err := books.ChapterFromString(chapterStr)
 	require.NoError(t, err)
 	require.Equal(t, 5, chapter.GetNumber())
 	require.Equal(t, "The Final Confrontation", chapter.GetTitle())
@@ -795,7 +795,7 @@ func TestChapterFromStringWithoutNumber(t *testing.T) {
 	chapterStr := `## Epilogue
 The story concludes.`
 
-	chapter, err := viter.ChapterFromString(chapterStr)
+	chapter, err := books.ChapterFromString(chapterStr)
 	require.NoError(t, err)
 	require.Equal(t, 0, chapter.GetNumber())
 	require.Equal(t, "Epilogue", chapter.GetTitle())
@@ -807,7 +807,7 @@ func TestChapterFromStringInvalidNumber(t *testing.T) {
 	chapterStr := `## abc. Invalid Number
 This should not parse the number.`
 
-	chapter, err := viter.ChapterFromString(chapterStr)
+	chapter, err := books.ChapterFromString(chapterStr)
 	require.NoError(t, err)
 	require.Equal(t, 0, chapter.GetNumber())
 	require.Equal(t, "abc. Invalid Number", chapter.GetTitle())
@@ -816,22 +816,22 @@ This should not parse the number.`
 
 func TestPlanMerge(t *testing.T) {
 	// Create original plan
-	original := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "Original content 1"),
-		viter.NewChapter(2, "Chapter 2", "Original content 2"),
-		viter.NewChapter(0, "Prologue", "Original prologue"),
+	original := books.Plan{
+		books.NewChapter(1, "Chapter 1", "Original content 1"),
+		books.NewChapter(2, "Chapter 2", "Original content 2"),
+		books.NewChapter(0, "Prologue", "Original prologue"),
 	}
 
 	// Create new plan with overlapping and new chapters
-	updates := viter.Plan{
-		viter.NewChapter(2, "Chapter 2 Updated", "Updated content 2"),
-		viter.NewChapter(3, "Chapter 3", "New content 3"),
-		viter.NewChapter(0, "Epilogue", "New epilogue"),
+	updates := books.Plan{
+		books.NewChapter(2, "Chapter 2 Updated", "Updated content 2"),
+		books.NewChapter(3, "Chapter 3", "New content 3"),
+		books.NewChapter(0, "Epilogue", "New epilogue"),
 	}
 
 	// Test merge through SetPlan
 	fs := afero.NewMemMapFs()
-	book, err := viter.CreateBook(fs, "/test")
+	book, err := books.CreateBook(fs, "/test")
 	require.NoError(t, err)
 
 	// Set original plan
@@ -849,8 +849,8 @@ func TestPlanMerge(t *testing.T) {
 	require.Len(t, result, 5)
 
 	// Find chapters by number for verification
-	chaptersByNumber := make(map[int]*viter.Chapter)
-	var zeroChapters []*viter.Chapter
+	chaptersByNumber := make(map[int]*books.Chapter)
+	var zeroChapters []*books.Chapter
 
 	for _, ch := range result {
 		if ch.GetNumber() == 0 {
@@ -882,18 +882,18 @@ func TestPlanMerge(t *testing.T) {
 
 func TestPlanMergeEmpty(t *testing.T) {
 	fs := afero.NewMemMapFs()
-	book, err := viter.CreateBook(fs, "/test")
+	book, err := books.CreateBook(fs, "/test")
 	require.NoError(t, err)
 
 	// Set original plan
-	original := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "Content 1"),
+	original := books.Plan{
+		books.NewChapter(1, "Chapter 1", "Content 1"),
 	}
 	err = book.SetPlan(original)
 	require.NoError(t, err)
 
 	// Merge with empty plan
-	empty := viter.Plan{}
+	empty := books.Plan{}
 	err = book.SetPlan(empty)
 	require.NoError(t, err)
 
@@ -914,7 +914,7 @@ The first major obstacle appears
 ## 3. Chapter 3: The Resolution
 Everything comes together in the end`
 
-	plan, err := viter.PlanFromString(planStr)
+	plan, err := books.PlanFromString(planStr)
 	require.NoError(t, err)
 	require.Len(t, plan, 3)
 
@@ -946,7 +946,7 @@ A break in the action
 ## 2. Chapter 2: The Conflict
 The second chapter`
 
-	plan, err := viter.PlanFromString(planStr)
+	plan, err := books.PlanFromString(planStr)
 	require.NoError(t, err)
 	require.Len(t, plan, 4)
 
@@ -966,14 +966,14 @@ The second chapter`
 
 func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 	fs := afero.NewMemMapFs()
-	book, err := viter.CreateBook(fs, "/test")
+	book, err := books.CreateBook(fs, "/test")
 	require.NoError(t, err)
 
 	// Create original plan with numbered chapters
-	original := viter.Plan{
-		viter.NewChapter(1, "Chapter 1: The Start", "Beginning of the story"),
-		viter.NewChapter(2, "Chapter 2: The Journey", "Middle of the story"),
-		viter.NewChapter(0, "Prologue", "Before it all began"),
+	original := books.Plan{
+		books.NewChapter(1, "Chapter 1: The Start", "Beginning of the story"),
+		books.NewChapter(2, "Chapter 2: The Journey", "Middle of the story"),
+		books.NewChapter(0, "Prologue", "Before it all began"),
 	}
 
 	err = book.SetPlan(original)
@@ -981,15 +981,15 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 
 	// Convert plan to string and back
 	planStr := original.String()
-	parsedPlan, err := viter.PlanFromString(planStr)
+	parsedPlan, err := books.PlanFromString(planStr)
 	require.NoError(t, err)
 
 	// Verify round-trip preserves numbers
 	require.Len(t, parsedPlan, 3)
 
 	// Find chapters by number
-	chaptersByNumber := make(map[int]*viter.Chapter)
-	var zeroChapters []*viter.Chapter
+	chaptersByNumber := make(map[int]*books.Chapter)
+	var zeroChapters []*books.Chapter
 
 	for _, ch := range parsedPlan {
 		if ch.GetNumber() == 0 {
@@ -1012,10 +1012,10 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 	require.Equal(t, "Before it all began", zeroChapters[0].GetContent())
 
 	// Now test merge functionality with updates
-	updates := viter.Plan{
-		viter.NewChapter(2, "Chapter 2: The Updated Journey", "Updated middle story"),
-		viter.NewChapter(3, "Chapter 3: The End", "End of the story"),
-		viter.NewChapter(0, "Epilogue", "After it all ended"),
+	updates := books.Plan{
+		books.NewChapter(2, "Chapter 2: The Updated Journey", "Updated middle story"),
+		books.NewChapter(3, "Chapter 3: The End", "End of the story"),
+		books.NewChapter(0, "Epilogue", "After it all ended"),
 	}
 
 	// Merge updates
@@ -1027,8 +1027,8 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 	require.Len(t, merged, 5) // 1, updated 2, prologue, new 3, epilogue
 
 	// Reset maps for merged plan
-	chaptersByNumber = make(map[int]*viter.Chapter)
-	zeroChapters = []*viter.Chapter{}
+	chaptersByNumber = make(map[int]*books.Chapter)
+	zeroChapters = []*books.Chapter{}
 
 	for _, ch := range merged {
 		if ch.GetNumber() == 0 {
@@ -1061,13 +1061,13 @@ func TestRoundTripNumberedChaptersAndPlanMerge(t *testing.T) {
 
 	// Final round-trip test - convert merged plan to string and back
 	finalStr := merged.String()
-	finalParsed, err := viter.PlanFromString(finalStr)
+	finalParsed, err := books.PlanFromString(finalStr)
 	require.NoError(t, err)
 	require.Len(t, finalParsed, 5)
 
 	// Verify the final parsed version has all the right data
-	finalByNumber := make(map[int]*viter.Chapter)
-	var finalZeroChapters []*viter.Chapter
+	finalByNumber := make(map[int]*books.Chapter)
+	var finalZeroChapters []*books.Chapter
 
 	for _, ch := range finalParsed {
 		if ch.GetNumber() == 0 {
@@ -1087,20 +1087,20 @@ func TestGetChapter(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 2 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Set some chapters
-	chapter1 := viter.NewChapter(1, "First Chapter", "This is the first chapter content")
-	chapter2 := viter.NewChapter(2, "Second Chapter", "This is the second chapter content")
+	chapter1 := books.NewChapter(1, "First Chapter", "This is the first chapter content")
+	chapter2 := books.NewChapter(2, "Second Chapter", "This is the second chapter content")
 
 	err = book.SetChapter(1, chapter1)
 	require.NoError(t, err)
@@ -1121,14 +1121,14 @@ func TestGetChapter(t *testing.T) {
 	require.Equal(t, chapter2.GetNumber(), retrievedChapter2.GetNumber())
 
 	// Create a new book to test empty chapters
-	emptyBook, err := viter.CreateBook(fs, "/test/empty_book")
+	emptyBook, err := books.CreateBook(fs, "/test/empty_book")
 	require.NoError(t, err)
 
 	// Set up a plan with 3 chapters but don't set any chapter content
-	emptyPlan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
-		viter.NewChapter(3, "Chapter 3", "Third chapter"),
+	emptyPlan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
+		books.NewChapter(3, "Chapter 3", "Third chapter"),
 	}
 	err = emptyBook.SetPlan(emptyPlan)
 	require.NoError(t, err)
@@ -1145,13 +1145,13 @@ func TestGetChapterInvalidIndex(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 2 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
@@ -1159,43 +1159,43 @@ func TestGetChapterInvalidIndex(t *testing.T) {
 	// Test negative index
 	_, err = book.GetChapter(-1)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	// Test zero index
 	_, err = book.GetChapter(0)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	// Test index too high
 	_, err = book.GetChapter(3)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 }
 
 func TestGetChapterCritique(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 2 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Create some critiques
-	critique1 := &viter.Critique{
+	critique1 := &books.Critique{
 		Strengths:    "Good pacing, Strong dialogue",
 		Improvements: "Needs more description, Character development",
 		Impressions:  "Engaging, Well-written",
 		Score:        8,
 	}
 
-	critique2 := &viter.Critique{
+	critique2 := &books.Critique{
 		Strengths:    "Excellent world-building",
 		Improvements: "Plot could be tighter",
 		Impressions:  "Creative, Immersive",
@@ -1226,14 +1226,14 @@ func TestGetChapterCritique(t *testing.T) {
 	require.Equal(t, critique2.GetScore(), retrievedCritique2.GetScore())
 
 	// Create a new book to test empty chapter critiques
-	emptyCritBook, err := viter.CreateBook(fs, "/test/empty_crit_book")
+	emptyCritBook, err := books.CreateBook(fs, "/test/empty_crit_book")
 	require.NoError(t, err)
 
 	// Set up a plan with 3 chapters but don't set any chapter critiques
-	emptyCritPlan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
-		viter.NewChapter(3, "Chapter 3", "Third chapter"),
+	emptyCritPlan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
+		books.NewChapter(3, "Chapter 3", "Third chapter"),
 	}
 	err = emptyCritBook.SetPlan(emptyCritPlan)
 	require.NoError(t, err)
@@ -1252,13 +1252,13 @@ func TestGetChapterCritiqueInvalidIndex(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 2 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
@@ -1266,36 +1266,36 @@ func TestGetChapterCritiqueInvalidIndex(t *testing.T) {
 	// Test negative index
 	_, err = book.GetChapterCritique(-1)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	// Test zero index
 	_, err = book.GetChapterCritique(0)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	// Test index too high
 	_, err = book.GetChapterCritique(3)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 }
 
 func TestSetChapterCritique(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 2 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Create a critique
-	critique := &viter.Critique{
+	critique := &books.Critique{
 		Strengths:    "Good pacing, Strong dialogue",
 		Improvements: "Needs more description, Character development",
 		Impressions:  "Engaging, Well-written",
@@ -1334,18 +1334,18 @@ func TestSetChapterCritiqueInvalidIndex(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 2 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
-	critique := &viter.Critique{
+	critique := &books.Critique{
 		Strengths:    "Good pacing",
 		Improvements: "Needs work",
 		Impressions:  "Okay",
@@ -1355,44 +1355,44 @@ func TestSetChapterCritiqueInvalidIndex(t *testing.T) {
 	// Test negative index
 	err = book.SetChapterCritique(-1, critique)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	// Test zero index
 	err = book.SetChapterCritique(0, critique)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 
 	// Test index too high
 	err = book.SetChapterCritique(3, critique)
 	require.Error(t, err)
-	require.Equal(t, viter.ErrInvalidChapterIndex, err)
+	require.Equal(t, books.ErrInvalidChapterIndex, err)
 }
 
 func TestSetChapterCritiqueExpandsSlice(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 3 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
-		viter.NewChapter(3, "Chapter 3", "Third chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
+		books.NewChapter(3, "Chapter 3", "Third chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Create critiques
-	critique1 := &viter.Critique{
+	critique1 := &books.Critique{
 		Strengths:    "Good start",
 		Improvements: "Needs polish",
 		Impressions:  "Promising",
 		Score:        6,
 	}
 
-	critique3 := &viter.Critique{
+	critique3 := &books.Critique{
 		Strengths:    "Great ending",
 		Improvements: "Minor issues",
 		Impressions:  "Satisfying",
@@ -1430,22 +1430,22 @@ func TestGetChapterMixedSetAndUnset(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	path := "/test/book"
 
-	book, err := viter.CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	require.NoError(t, err)
 
 	// Set up a plan with 4 chapters
-	plan := viter.Plan{
-		viter.NewChapter(1, "Chapter 1", "First chapter"),
-		viter.NewChapter(2, "Chapter 2", "Second chapter"),
-		viter.NewChapter(3, "Chapter 3", "Third chapter"),
-		viter.NewChapter(4, "Chapter 4", "Fourth chapter"),
+	plan := books.Plan{
+		books.NewChapter(1, "Chapter 1", "First chapter"),
+		books.NewChapter(2, "Chapter 2", "Second chapter"),
+		books.NewChapter(3, "Chapter 3", "Third chapter"),
+		books.NewChapter(4, "Chapter 4", "Fourth chapter"),
 	}
 	err = book.SetPlan(plan)
 	require.NoError(t, err)
 
 	// Set only chapters 1 and 3, leave 2 and 4 unset
-	chapter1 := viter.NewChapter(1, "First Chapter Content", "This is the first chapter")
-	chapter3 := viter.NewChapter(3, "Third Chapter Content", "This is the third chapter")
+	chapter1 := books.NewChapter(1, "First Chapter Content", "This is the first chapter")
+	chapter3 := books.NewChapter(3, "Third Chapter Content", "This is the third chapter")
 
 	err = book.SetChapter(1, chapter1)
 	require.NoError(t, err)
@@ -1479,7 +1479,7 @@ func TestGetChapterMixedSetAndUnset(t *testing.T) {
 	require.Equal(t, 0, emptyChapter4.GetNumber())
 
 	// Verify that setting a chapter after getting an empty one works
-	chapter2 := viter.NewChapter(2, "Second Chapter Content", "This is the second chapter")
+	chapter2 := books.NewChapter(2, "Second Chapter Content", "This is the second chapter")
 	err = book.SetChapter(2, chapter2)
 	require.NoError(t, err)
 
@@ -1493,36 +1493,36 @@ func TestGetChapterMixedSetAndUnset(t *testing.T) {
 
 func TestBookMetaMergedCopy(t *testing.T) {
 	// Test merging with empty target
-	original := &viter.BookMeta{}
+	original := &books.BookMeta{}
 	original.SetStyle("Fantasy")
 	original.SetGenres([]string{"Epic Fantasy", "Adventure"})
 	original.SetLogline("A hero's journey")
 	original.SetWorld("Middle Earth")
-	original.SetProtagonists([]viter.Character{
-		viter.NewCharacter("Frodo", "A hobbit"),
+	original.SetProtagonists([]books.Character{
+		books.NewCharacter("Frodo", "A hobbit"),
 	})
-	original.SetAntagonists([]viter.Character{
-		viter.NewCharacter("Sauron", "Dark Lord"),
+	original.SetAntagonists([]books.Character{
+		books.NewCharacter("Sauron", "Dark Lord"),
 	})
-	original.SetMinorCharacters([]viter.Character{
-		viter.NewCharacter("Sam", "Loyal friend"),
+	original.SetMinorCharacters([]books.Character{
+		books.NewCharacter("Sam", "Loyal friend"),
 	})
 	original.SetPlot("The ring must be destroyed")
 	original.SetTitle("The Lord of the Rings")
 
-	other := &viter.BookMeta{}
+	other := &books.BookMeta{}
 	other.SetStyle("Science Fiction")
 	other.SetGenres([]string{"Space Opera"})
 	other.SetLogline("A galactic adventure")
 	other.SetWorld("Galaxy Far Far Away")
-	other.SetProtagonists([]viter.Character{
-		viter.NewCharacter("Luke", "Jedi Knight"),
+	other.SetProtagonists([]books.Character{
+		books.NewCharacter("Luke", "Jedi Knight"),
 	})
-	other.SetAntagonists([]viter.Character{
-		viter.NewCharacter("Vader", "Sith Lord"),
+	other.SetAntagonists([]books.Character{
+		books.NewCharacter("Vader", "Sith Lord"),
 	})
-	other.SetMinorCharacters([]viter.Character{
-		viter.NewCharacter("Han", "Smuggler"),
+	other.SetMinorCharacters([]books.Character{
+		books.NewCharacter("Han", "Smuggler"),
 	})
 	other.SetPlot("Destroy the Death Star")
 	other.SetTitle("Star Wars")
@@ -1554,7 +1554,7 @@ func TestBookMetaMergedCopy(t *testing.T) {
 }
 
 func TestBookMetaMergedCopyPartial(t *testing.T) {
-	original := &viter.BookMeta{}
+	original := &books.BookMeta{}
 	original.SetStyle("Fantasy")
 	original.SetGenres([]string{"Epic Fantasy"})
 	original.SetLogline("A hero's journey")
@@ -1563,7 +1563,7 @@ func TestBookMetaMergedCopyPartial(t *testing.T) {
 	original.SetTitle("The Lord of the Rings")
 
 	// Only some fields set in other
-	other := &viter.BookMeta{}
+	other := &books.BookMeta{}
 	other.SetStyle("Dark Fantasy")
 	other.SetLogline("A darker journey")
 	// Other fields empty/nil
@@ -1584,11 +1584,11 @@ func TestBookMetaMergedCopyPartial(t *testing.T) {
 }
 
 func TestBookMetaMergedCopyEmpty(t *testing.T) {
-	original := &viter.BookMeta{}
+	original := &books.BookMeta{}
 	original.SetStyle("Fantasy")
 	original.SetTitle("Original Title")
 
-	empty := &viter.BookMeta{}
+	empty := &books.BookMeta{}
 	merged := original.MergedCopy(empty)
 
 	// Should be identical to original since other is empty
@@ -1600,7 +1600,7 @@ func TestBookMetaMergedCopyEmpty(t *testing.T) {
 }
 
 func TestBookMetaMergedCopyNil(t *testing.T) {
-	original := &viter.BookMeta{}
+	original := &books.BookMeta{}
 	original.SetStyle("Fantasy")
 	original.SetTitle("Original Title")
 
@@ -1612,17 +1612,17 @@ func TestBookMetaMergedCopyNil(t *testing.T) {
 }
 
 func TestPlanMergedCopy(t *testing.T) {
-	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
-	ch2 := viter.NewChapter(2, "Chapter 2", "Content 2")
-	ch0 := viter.NewChapter(0, "Unnumbered", "No number")
+	ch1 := books.NewChapter(1, "Chapter 1", "Content 1")
+	ch2 := books.NewChapter(2, "Chapter 2", "Content 2")
+	ch0 := books.NewChapter(0, "Unnumbered", "No number")
 
-	original := viter.Plan{ch1, ch2, ch0}
+	original := books.Plan{ch1, ch2, ch0}
 
-	newCh2 := viter.NewChapter(2, "New Chapter 2", "New Content 2")
-	ch3 := viter.NewChapter(3, "Chapter 3", "Content 3")
-	anotherCh0 := viter.NewChapter(0, "Another Unnumbered", "Also no number")
+	newCh2 := books.NewChapter(2, "New Chapter 2", "New Content 2")
+	ch3 := books.NewChapter(3, "Chapter 3", "Content 3")
+	anotherCh0 := books.NewChapter(0, "Another Unnumbered", "Also no number")
 
-	other := viter.Plan{newCh2, ch3, anotherCh0}
+	other := books.Plan{newCh2, ch3, anotherCh0}
 
 	merged := original.MergedCopy(other)
 
@@ -1673,10 +1673,10 @@ func TestPlanMergedCopy(t *testing.T) {
 }
 
 func TestPlanMergedCopyEmpty(t *testing.T) {
-	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
-	original := viter.Plan{ch1}
+	ch1 := books.NewChapter(1, "Chapter 1", "Content 1")
+	original := books.Plan{ch1}
 
-	empty := viter.Plan{}
+	empty := books.Plan{}
 	merged := original.MergedCopy(empty)
 
 	// Should be identical to original
@@ -1687,12 +1687,12 @@ func TestPlanMergedCopyEmpty(t *testing.T) {
 }
 
 func TestPlanMergedCopyOnlyUnnumbered(t *testing.T) {
-	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
-	original := viter.Plan{ch1}
+	ch1 := books.NewChapter(1, "Chapter 1", "Content 1")
+	original := books.Plan{ch1}
 
-	unCh1 := viter.NewChapter(0, "Unnumbered 1", "No number 1")
-	unCh2 := viter.NewChapter(0, "Unnumbered 2", "No number 2")
-	other := viter.Plan{unCh1, unCh2}
+	unCh1 := books.NewChapter(0, "Unnumbered 1", "No number 1")
+	unCh2 := books.NewChapter(0, "Unnumbered 2", "No number 2")
+	other := books.Plan{unCh1, unCh2}
 
 	merged := original.MergedCopy(other)
 
@@ -1705,13 +1705,13 @@ func TestPlanMergedCopyOnlyUnnumbered(t *testing.T) {
 }
 
 func TestPlanMergedCopyAllReplaced(t *testing.T) {
-	oldCh1 := viter.NewChapter(1, "Old Chapter 1", "Old Content 1")
-	oldCh2 := viter.NewChapter(2, "Old Chapter 2", "Old Content 2")
-	original := viter.Plan{oldCh1, oldCh2}
+	oldCh1 := books.NewChapter(1, "Old Chapter 1", "Old Content 1")
+	oldCh2 := books.NewChapter(2, "Old Chapter 2", "Old Content 2")
+	original := books.Plan{oldCh1, oldCh2}
 
-	newCh1 := viter.NewChapter(1, "New Chapter 1", "New Content 1")
-	newCh2 := viter.NewChapter(2, "New Chapter 2", "New Content 2")
-	other := viter.Plan{newCh1, newCh2}
+	newCh1 := books.NewChapter(1, "New Chapter 1", "New Content 1")
+	newCh2 := books.NewChapter(2, "New Chapter 2", "New Content 2")
+	other := books.Plan{newCh1, newCh2}
 
 	merged := original.MergedCopy(other)
 
@@ -1722,11 +1722,11 @@ func TestPlanMergedCopyAllReplaced(t *testing.T) {
 
 func TestPlanMergedCopyEmptyOriginal(t *testing.T) {
 	// Test merging into an empty plan
-	empty := viter.Plan{}
+	empty := books.Plan{}
 
-	ch1 := viter.NewChapter(1, "Chapter 1", "Content 1")
-	ch2 := viter.NewChapter(0, "Unnumbered", "No number")
-	other := viter.Plan{ch1, ch2}
+	ch1 := books.NewChapter(1, "Chapter 1", "Content 1")
+	ch2 := books.NewChapter(0, "Unnumbered", "No number")
+	other := books.Plan{ch1, ch2}
 
 	merged := empty.MergedCopy(other)
 

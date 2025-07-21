@@ -1,6 +1,8 @@
 package viter
 
 import (
+	"viter/internal/books"
+
 	"github.com/spf13/afero"
 	"github.com/tmc/langchaingo/llms"
 	"go.uber.org/zap"
@@ -27,7 +29,7 @@ type TextGenerator interface {
 type Viter struct {
 	tg   TextGenerator
 	pp   PromptProvider
-	book *Book
+	book *books.Book
 	log  *zap.SugaredLogger
 	cfg  Config
 }
@@ -44,7 +46,7 @@ func NewViter(cfg Config, pp PromptProvider, tg TextGenerator) (*Viter, bool) {
 }
 
 func (v *Viter) CreateBook(fs afero.Fs, path string) bool {
-	book, err := CreateBook(fs, path)
+	book, err := books.CreateBook(fs, path)
 	if err != nil {
 		v.log.Error(err)
 		return false
@@ -58,7 +60,7 @@ func (v *Viter) CreateBook(fs afero.Fs, path string) bool {
 }
 
 func (v *Viter) LoadBook(fs afero.Fs, path string) bool {
-	book, err := LoadBook(fs, path)
+	book, err := books.LoadBook(fs, path)
 	if err != nil {
 		v.log.Error(err)
 		return false
@@ -201,7 +203,7 @@ func (v *Viter) UpdateChapter(nChapter, minScore int) bool {
 	}
 }
 
-func (v *Viter) writeMeta(prevMeta *BookMeta) (*BookMeta, bool) {
+func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
 	v.log.Infow("writing meta")
 
 	messages := make([]llms.MessageContent, 2)
@@ -223,7 +225,7 @@ func (v *Viter) writeMeta(prevMeta *BookMeta) (*BookMeta, bool) {
 		return nil, false
 	}
 
-	meta, err := MetaFromString(metaData)
+	meta, err := books.MetaFromString(metaData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -234,7 +236,7 @@ func (v *Viter) writeMeta(prevMeta *BookMeta) (*BookMeta, bool) {
 	return meta, true
 }
 
-func (v *Viter) critiqueMeta(meta *BookMeta) (*Critique, bool) {
+func (v *Viter) critiqueMeta(meta *books.BookMeta) (*books.Critique, bool) {
 	v.log.Infow("critiquing meta")
 
 	messages := make([]llms.MessageContent, 2)
@@ -256,7 +258,7 @@ func (v *Viter) critiqueMeta(meta *BookMeta) (*Critique, bool) {
 		return nil, false
 	}
 
-	crit, err := CritiqueFromString(critData)
+	crit, err := books.CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -271,7 +273,7 @@ func (v *Viter) critiqueMeta(meta *BookMeta) (*Critique, bool) {
 	return crit, true
 }
 
-func (v *Viter) updateMeta(prevMeta *BookMeta, crit *Critique) (*BookMeta, bool) {
+func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique) (*books.BookMeta, bool) {
 	v.log.Infow("updating meta")
 
 	messages := make([]llms.MessageContent, 2)
@@ -295,7 +297,7 @@ func (v *Viter) updateMeta(prevMeta *BookMeta, crit *Critique) (*BookMeta, bool)
 		return nil, false
 	}
 
-	meta, err := MetaFromString(metaData)
+	meta, err := books.MetaFromString(metaData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -306,7 +308,7 @@ func (v *Viter) updateMeta(prevMeta *BookMeta, crit *Critique) (*BookMeta, bool)
 	return meta, true
 }
 
-func (v *Viter) writePlan(prevPlan Plan, chapterCount int) (Plan, bool) {
+func (v *Viter) writePlan(prevPlan books.Plan, chapterCount int) (books.Plan, bool) {
 	v.log.Infow("writing plan", "chapters", chapterCount)
 
 	messages := make([]llms.MessageContent, 2)
@@ -331,7 +333,7 @@ func (v *Viter) writePlan(prevPlan Plan, chapterCount int) (Plan, bool) {
 		return nil, false
 	}
 
-	plan, err := PlanFromString(planData)
+	plan, err := books.PlanFromString(planData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -342,7 +344,7 @@ func (v *Viter) writePlan(prevPlan Plan, chapterCount int) (Plan, bool) {
 	return plan, true
 }
 
-func (v *Viter) critiquePlan(plan Plan) (*Critique, bool) {
+func (v *Viter) critiquePlan(plan books.Plan) (*books.Critique, bool) {
 	v.log.Infow("critiquing plan")
 
 	messages := make([]llms.MessageContent, 2)
@@ -365,7 +367,7 @@ func (v *Viter) critiquePlan(plan Plan) (*Critique, bool) {
 		return nil, false
 	}
 
-	crit, err := CritiqueFromString(critData)
+	crit, err := books.CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -380,7 +382,7 @@ func (v *Viter) critiquePlan(plan Plan) (*Critique, bool) {
 	return crit, true
 }
 
-func (v *Viter) updatePlan(prevPlan Plan, crit *Critique) (Plan, bool) {
+func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique) (books.Plan, bool) {
 	v.log.Infow("updating plan")
 
 	messages := make([]llms.MessageContent, 2)
@@ -405,7 +407,7 @@ func (v *Viter) updatePlan(prevPlan Plan, crit *Critique) (Plan, bool) {
 		return nil, false
 	}
 
-	plan, err := PlanFromString(planData)
+	plan, err := books.PlanFromString(planData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -416,7 +418,7 @@ func (v *Viter) updatePlan(prevPlan Plan, crit *Critique) (Plan, bool) {
 	return plan, true
 }
 
-func (v *Viter) writeChapter(n int) (*Chapter, bool) {
+func (v *Viter) writeChapter(n int) (*books.Chapter, bool) {
 	v.log.Infow("writing chapter")
 
 	messages := make([]llms.MessageContent, 2)
@@ -454,7 +456,7 @@ func (v *Viter) writeChapter(n int) (*Chapter, bool) {
 		return nil, false
 	}
 
-	chapter, err := ChapterFromString(chapterData)
+	chapter, err := books.ChapterFromString(chapterData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -466,7 +468,7 @@ func (v *Viter) writeChapter(n int) (*Chapter, bool) {
 	return chapter, true
 }
 
-func (v *Viter) critiqueChapter(chapter *Chapter) (*Critique, bool) {
+func (v *Viter) critiqueChapter(chapter *books.Chapter) (*books.Critique, bool) {
 	v.log.Infow("critiquing chapter")
 
 	messages := make([]llms.MessageContent, 2)
@@ -499,7 +501,7 @@ func (v *Viter) critiqueChapter(chapter *Chapter) (*Critique, bool) {
 		return nil, false
 	}
 
-	crit, err := CritiqueFromString(critData)
+	crit, err := books.CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
@@ -514,7 +516,7 @@ func (v *Viter) critiqueChapter(chapter *Chapter) (*Critique, bool) {
 	return crit, true
 }
 
-func (v *Viter) updateChapter(prevChp *Chapter, crit *Critique) (*Chapter, bool) {
+func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*books.Chapter, bool) {
 	v.log.Infow("updating chapter", "n", prevChp.GetNumber())
 
 	messages := make([]llms.MessageContent, 4)
@@ -559,7 +561,7 @@ func (v *Viter) updateChapter(prevChp *Chapter, crit *Critique) (*Chapter, bool)
 		return nil, false
 	}
 
-	chp, err := ChapterFromString(chapterData)
+	chp, err := books.ChapterFromString(chapterData)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
