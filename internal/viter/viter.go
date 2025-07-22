@@ -91,24 +91,29 @@ func (v *Viter) UpdateMeta(iterCount int) bool {
 		v.book.SetMeta(meta)
 	}
 
-	for i := 1; ; i++ {
+	if v.book.GetMetaCrit() == nil || v.book.GetMetaCrit().GetImprovements() == "" {
 		crit, ok := v.critiqueMeta(v.book.GetMeta())
 		if !ok {
 			return false
 		}
 		v.book.SetMetaCrit(crit)
+	}
 
-		if i >= iterCount {
-			return true
-		}
-
+	for i := 1; i < iterCount; i++ {
 		meta, ok := v.updateMeta(v.book.GetMeta(), v.book.GetMetaCrit())
 		if !ok {
 			return false
 		}
 		meta = v.book.GetMeta().MergedCopy(meta)
+		crit, ok := v.critiqueMeta(meta)
+		if !ok {
+			return false
+		}
 		v.book.SetMeta(meta)
+		v.book.SetMetaCrit(crit)
 	}
+
+	return true
 }
 
 func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
@@ -124,24 +129,29 @@ func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
 		v.book.SetPlan(plan)
 	}
 
-	for i := 1; ; i++ {
+	if v.book.GetPlanCrit() == nil || v.book.GetPlanCrit().GetImprovements() == "" {
 		crit, ok := v.critiquePlan(v.book.GetPlan())
 		if !ok {
 			return false
 		}
 		v.book.SetPlanCrit(crit)
+	}
 
-		if i >= iterCount {
-			return true
-		}
-
+	for i := 1; i < iterCount; i++ {
 		plan, ok := v.updatePlan(v.book.GetPlan(), v.book.GetPlanCrit())
 		if !ok {
 			return false
 		}
 		plan = v.book.GetPlan().MergedCopy(plan)
+		crit, ok := v.critiquePlan(plan)
+		if !ok {
+			return false
+		}
 		v.book.SetPlan(plan)
+		v.book.SetPlanCrit(crit)
 	}
+
+	return true
 }
 
 func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
@@ -159,24 +169,33 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 		v.book.SetChapter(nChapter, newChp)
 	}
 
-	for i := 1; ; i++ {
+	if crit, err := v.book.GetChapterCritique(nChapter); err != nil {
+		return false
+	} else if crit == nil || crit.GetImprovements() == "" {
 		chp, _ := v.book.GetChapter(nChapter)
 		crit, ok := v.critiqueChapter(chp)
 		if !ok {
 			return false
 		}
 		v.book.SetChapterCritique(nChapter, crit)
+	}
 
-		if i >= iterCount {
-			return true
-		}
-
+	for i := 1; i < iterCount; i++ {
+		chp, _ := v.book.GetChapter(nChapter)
+		crit, _ := v.book.GetChapterCritique(nChapter)
 		chapter, ok := v.updateChapter(chp, crit)
 		if !ok {
 			return false
 		}
+		crit, ok = v.critiqueChapter(chapter)
+		if !ok {
+			return false
+		}
 		v.book.SetChapter(nChapter, chapter)
+		v.book.SetChapterCritique(nChapter, crit)
 	}
+
+	return true
 }
 
 func (v *Viter) UpdateAllChapters(iterCount int) bool {
