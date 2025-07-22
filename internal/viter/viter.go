@@ -87,12 +87,14 @@ func (v *Viter) UpdateMeta(iterCount int) bool {
 		return false
 	}
 
+	i := 0
 	if !v.book.GetMeta().IsFilled() {
 		meta, ok := v.writeMeta(v.book.GetMeta())
 		if !ok {
 			return false
 		}
 		v.book.SetMeta(meta)
+		i++
 	}
 
 	if v.book.GetMetaCrit() == nil || v.book.GetMetaCrit().GetImprovements() == "" {
@@ -103,7 +105,7 @@ func (v *Viter) UpdateMeta(iterCount int) bool {
 		v.book.SetMetaCrit(crit)
 	}
 
-	for i := 1; i < iterCount; i++ {
+	for ; i < iterCount; i++ {
 		meta, ok := v.updateMeta(v.book.GetMeta(), v.book.GetMetaCrit())
 		if !ok {
 			return false
@@ -125,12 +127,14 @@ func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
 		return false
 	}
 
+	i := 0
 	if len(v.book.GetPlan()) != chapterCount {
 		plan, ok := v.writePlan(v.book.GetPlan(), chapterCount)
 		if !ok {
 			return false
 		}
 		v.book.SetPlan(plan)
+		i++
 	}
 
 	if v.book.GetPlanCrit() == nil || v.book.GetPlanCrit().GetImprovements() == "" {
@@ -141,7 +145,7 @@ func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
 		v.book.SetPlanCrit(crit)
 	}
 
-	for i := 1; i < iterCount; i++ {
+	for ; i < iterCount; i++ {
 		plan, ok := v.updatePlan(v.book.GetPlan(), v.book.GetPlanCrit())
 		if !ok {
 			return false
@@ -163,6 +167,7 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 		return false
 	}
 
+	i := 0
 	if chp, err := v.book.GetChapter(nChapter); err != nil {
 		return false
 	} else if chp == nil || chp.GetContent() == "" {
@@ -171,6 +176,7 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 			return false
 		}
 		v.book.SetChapter(nChapter, newChp)
+		i++
 	}
 
 	if crit, err := v.book.GetChapterCritique(nChapter); err != nil {
@@ -184,7 +190,7 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 		v.book.SetChapterCritique(nChapter, crit)
 	}
 
-	for i := 1; i < iterCount; i++ {
+	for ; i < iterCount; i++ {
 		chp, _ := v.book.GetChapter(nChapter)
 		crit, _ := v.book.GetChapterCritique(nChapter)
 		chapter, ok := v.updateChapter(chp, crit)

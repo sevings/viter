@@ -412,6 +412,7 @@ func TestViter_UpdateMeta_AlreadyFilledMeta(t *testing.T) {
 		responses: []string{
 			createValidCritiqueResponse(9),
 			createValidMetaResponse(),
+			createValidCritiqueResponse(19),
 		},
 	}
 	v, _ := viter.NewViter(cfg, pp, tg)
@@ -432,7 +433,7 @@ func TestViter_UpdateMeta_AlreadyFilledMeta(t *testing.T) {
 	result := v.UpdateMeta(1)
 
 	require.True(t, result)
-	require.Equal(t, 1, tg.callCount) // Should do 1 critique only (no update after last critique)
+	require.Equal(t, 3, tg.callCount)
 }
 
 // UpdatePlan Tests
