@@ -74,6 +74,10 @@ func (v *Viter) LoadBook(fs afero.Fs, path string) bool {
 	return true
 }
 
+func (v *Viter) EnableArchiving() {
+	v.book.EnableArchiving()
+}
+
 func (v *Viter) GetBook() *books.Book {
 	return v.book
 }

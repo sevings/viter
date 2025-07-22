@@ -17,7 +17,7 @@ func main() {
 	var configPath string
 	var debug bool
 	var create, meta, chapters bool
-	var md, html, epub bool
+	var md, html, epub, archive bool
 	var plan, chapter, iterCount int
 	var help bool
 
@@ -31,6 +31,7 @@ func main() {
 	flag.IntVar(&chapter, "chapter", 0, "Update chapter with given number")
 	flag.BoolVar(&chapters, "chapters", false, "Update all book chapters")
 	flag.IntVar(&iterCount, "iter", 5, "Update given number of times")
+	flag.BoolVar(&archive, "archive", false, "Make an archive copy of each file version")
 	flag.BoolVar(&md, "md", false, "Export to markdown file")
 	flag.BoolVar(&html, "html", false, "Export to html file")
 	flag.BoolVar(&epub, "epub", false, "Export to epub file")
@@ -98,6 +99,9 @@ func main() {
 	}
 	if !ok {
 		return
+	}
+	if debug || archive {
+		v.EnableArchiving()
 	}
 
 	if meta {
@@ -175,6 +179,8 @@ func printHelp() {
 	fmt.Println("        Update all book chapters")
 	fmt.Println("  -iter int")
 	fmt.Println("        Update given number of times (default 5)")
+	fmt.Println("  -archive")
+	fmt.Println("        Make an archive copy of each file version")
 	fmt.Println("  -epub")
 	fmt.Println("        Export to epub file")
 	fmt.Println("  -md")

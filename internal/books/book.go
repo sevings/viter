@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-shiori/go-epub"
 	"github.com/spf13/afero"
@@ -16,6 +17,7 @@ var (
 	ErrInvalidChapterIndex = errors.New("invalid chapter index")
 	ErrNoMetaFile          = errors.New("no meta file found")
 	ErrBookNotFinished     = errors.New("book not finished")
+	ErrFileNotFound        = errors.New("file not found")
 )
 
 type Book struct {
@@ -28,6 +30,8 @@ type Book struct {
 	metaCrit *Critique
 	planCrit *Critique
 	chpsCrit []*Critique
+
+	arch bool
 }
 
 // CreateBook creates a new book with the given filesystem and path.
@@ -46,18 +50,11 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	b := &Book{fs: fs, path: path}
 
 	// Load metadata
-	metaPath := filepath.Join(path, "meta.md")
-	if exists, err := afero.Exists(fs, metaPath); err != nil {
+	if content, err := b.readFile("meta.md"); err != nil && err != ErrFileNotFound {
 		return nil, err
-	} else if !exists {
+	} else if err == ErrFileNotFound {
 		return nil, ErrNoMetaFile
-	}
-
-	{
-		content, err := afero.ReadFile(fs, metaPath)
-		if err != nil {
-			return nil, err
-		}
+	} else {
 		meta, err := MetaFromString(string(content))
 		if err != nil {
 			return nil, err
@@ -66,14 +63,9 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	}
 
 	// Load meta critique if it exists
-	metaCritPath := filepath.Join(path, "meta_critique.md")
-	if exists, err := afero.Exists(fs, metaCritPath); err != nil {
+	if content, err := b.readFile("meta_critique.md"); err != nil && err != ErrFileNotFound {
 		return nil, err
-	} else if exists {
-		content, err := afero.ReadFile(fs, metaCritPath)
-		if err != nil {
-			return nil, err
-		}
+	} else if err == nil {
 		crit, err := CritiqueFromString(string(content))
 		if err != nil {
 			return nil, err
@@ -82,14 +74,9 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	}
 
 	// Load plan if it exists
-	planPath := filepath.Join(path, "plan.md")
-	if exists, err := afero.Exists(fs, planPath); err != nil {
+	if content, err := b.readFile("plan.md"); err != nil && err != ErrFileNotFound {
 		return nil, err
-	} else if exists {
-		content, err := afero.ReadFile(fs, planPath)
-		if err != nil {
-			return nil, err
-		}
+	} else if err == nil {
 		plan, err := PlanFromString(string(content))
 		if err != nil {
 			return nil, err
@@ -98,14 +85,9 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	}
 
 	// Load plan critique if it exists
-	planCritPath := filepath.Join(path, "plan_critique.md")
-	if exists, err := afero.Exists(fs, planCritPath); err != nil {
+	if content, err := b.readFile("plan_critique.md"); err != nil && err != ErrFileNotFound {
 		return nil, err
-	} else if exists {
-		content, err := afero.ReadFile(fs, planCritPath)
-		if err != nil {
-			return nil, err
-		}
+	} else if err == nil {
 		crit, err := CritiqueFromString(string(content))
 		if err != nil {
 			return nil, err
@@ -121,14 +103,10 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	b.chpsCrit = make([]*Critique, b.plan.Count())
 
 	for i := 1; i <= b.plan.Count(); i++ {
-		chpPath := filepath.Join(path, fmt.Sprintf("chapter_%d.md", i))
-		if exists, err := afero.Exists(fs, chpPath); err != nil {
+		chpName := fmt.Sprintf("chapter_%d.md", i)
+		if content, err := b.readFile(chpName); err != nil && err != ErrFileNotFound {
 			return nil, err
-		} else if exists {
-			content, err := afero.ReadFile(fs, chpPath)
-			if err != nil {
-				return nil, err
-			}
+		} else if err == nil {
 			chp, err := ChapterFromString(string(content))
 			if err != nil {
 				continue
@@ -138,14 +116,10 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	}
 
 	for i := 1; i <= b.plan.Count(); i++ {
-		critPath := filepath.Join(path, fmt.Sprintf("chapter_%d_critique.md", i))
-		if exists, err := afero.Exists(fs, critPath); err != nil {
+		critName := fmt.Sprintf("chapter_%d_critique.md", i)
+		if content, err := b.readFile(critName); err != nil && err != ErrFileNotFound {
 			return nil, err
-		} else if exists {
-			content, err := afero.ReadFile(fs, critPath)
-			if err != nil {
-				return nil, err
-			}
+		} else if err == nil {
 			crit, err := CritiqueFromString(string(content))
 			if err != nil {
 				continue
@@ -155,6 +129,19 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 	}
 
 	return b, nil
+}
+
+func (b *Book) EnableArchiving() {
+	archPath := b.getFilePath("archived")
+	if err := b.fs.MkdirAll(archPath, 0755); err != nil {
+		return
+	}
+
+	b.arch = true
+}
+
+func (b *Book) DisableArchiving() {
+	b.arch = false
 }
 
 // Save saves the book's metadata and plan (if it's not empty) to the filesystem.
@@ -190,35 +177,45 @@ func (b *Book) Save() error {
 }
 
 func (b *Book) saveMeta() error {
-	metaPath := filepath.Join(b.path, "meta.md")
-	if err := afero.WriteFile(b.fs, metaPath, []byte(b.meta.String()), 0644); err != nil {
-		return err
-	}
-	return nil
+	return b.writeFile("meta.md", []byte(b.meta.String()))
 }
 
 func (b *Book) savePlan() error {
-	planPath := filepath.Join(b.path, "plan.md")
-	if err := afero.WriteFile(b.fs, planPath, []byte(b.plan.String()), 0644); err != nil {
-		return err
-	}
-	return nil
+	return b.writeFile("plan.md", []byte(b.plan.String()))
 }
 
 func (b *Book) saveMetaCrit() error {
-	metaCritPath := filepath.Join(b.path, "meta_critique.md")
-	if err := afero.WriteFile(b.fs, metaCritPath, []byte(b.metaCrit.String()), 0644); err != nil {
-		return err
-	}
-	return nil
+	return b.writeFile("meta_critique.md", []byte(b.metaCrit.String()))
 }
 
 func (b *Book) savePlanCrit() error {
-	planCritPath := filepath.Join(b.path, "plan_critique.md")
-	if err := afero.WriteFile(b.fs, planCritPath, []byte(b.planCrit.String()), 0644); err != nil {
-		return err
+	return b.writeFile("plan_critique.md", []byte(b.planCrit.String()))
+}
+
+func (b *Book) writeFile(name string, content []byte) error {
+	filePath := b.getFilePath(name)
+
+	if b.arch {
+		archName := strings.ReplaceAll(name, ".", time.Now().Format("_2006-01-02_15-04-05."))
+		archPath := filepath.Join(b.path, "archived", archName)
+		b.fs.Rename(filePath, archPath)
 	}
-	return nil
+
+	return afero.WriteFile(b.fs, filePath, content, 0644)
+}
+
+func (b *Book) readFile(name string) ([]byte, error) {
+	filePath := b.getFilePath(name)
+	if exists, err := afero.Exists(b.fs, filePath); err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, ErrFileNotFound
+	}
+	return afero.ReadFile(b.fs, filePath)
+}
+
+func (b *Book) getFilePath(name string) string {
+	return filepath.Join(b.path, name)
 }
 
 // SetMeta sets the book's metadata and saves it to the filesystem.
@@ -274,9 +271,7 @@ func (b *Book) SetChapter(i int, chapter *Chapter) error {
 	}
 	b.chps[i-1] = chapter
 
-	filename := fmt.Sprintf("chapter_%d.md", i)
-	chapterPath := filepath.Join(b.path, filename)
-	return afero.WriteFile(b.fs, chapterPath, []byte(chapter.String()), 0644)
+	return b.writeFile(fmt.Sprintf("chapter_%d.md", i), []byte(chapter.String()))
 }
 
 func (b *Book) GetChapterCritique(i int) (*Critique, error) {
@@ -300,9 +295,7 @@ func (b *Book) SetChapterCritique(i int, crit *Critique) error {
 	}
 	b.chpsCrit[i-1] = crit
 
-	filename := fmt.Sprintf("chapter_%d_critique.md", i)
-	critPath := filepath.Join(b.path, filename)
-	return afero.WriteFile(b.fs, critPath, []byte(crit.String()), 0644)
+	return b.writeFile(fmt.Sprintf("chapter_%d_critique.md", i), []byte(crit.String()))
 }
 
 func (b *Book) GetFs() afero.Fs {
@@ -355,8 +348,7 @@ func (b *Book) ExportMarkdown() error {
 		text.WriteString("\n\n")
 	}
 
-	mdPath := filepath.Join(b.path, fmt.Sprintf("%s.md", title))
-	return afero.WriteFile(b.fs, mdPath, []byte(text.String()), 0644)
+	return b.writeFile(fmt.Sprintf("%s.md", title), []byte(text.String()))
 }
 
 func (b *Book) ExportHTML() error {
@@ -394,8 +386,7 @@ func (b *Book) ExportHTML() error {
 		text.WriteString("<hr>")
 	}
 
-	htmlPath := filepath.Join(b.path, fmt.Sprintf("%s.html", title))
-	return afero.WriteFile(b.fs, htmlPath, []byte(text.String()), 0644)
+	return b.writeFile(fmt.Sprintf("%s.html", title), []byte(text.String()))
 }
 
 func (b *Book) ExportEPUB() error {
@@ -437,7 +428,7 @@ func (b *Book) ExportEPUB() error {
 		}
 	}
 
-	epubPath := filepath.Join(b.path, fmt.Sprintf("%s.epub", title))
+	epubPath := b.getFilePath(fmt.Sprintf("%s.epub", title))
 	f, err := b.fs.OpenFile(epubPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
