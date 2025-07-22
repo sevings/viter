@@ -16,6 +16,7 @@ func main() {
 	var path, lang string
 	var configPath string
 	var debug bool
+	var simple string
 	var create, meta, chapters bool
 	var md, html, epub, archive bool
 	var plan, chapter, iterCount int
@@ -25,6 +26,7 @@ func main() {
 	flag.StringVar(&lang, "lang", "en", "Language of the book")
 	flag.StringVar(&configPath, "config", "viter.toml", "Path to the configuration file")
 	flag.BoolVar(&debug, "debug", false, "Enable debug mode")
+	flag.StringVar(&simple, "simple", "", "Generate the whole book using the given prompt")
 	flag.BoolVar(&create, "create", false, "Create a new book")
 	flag.BoolVar(&meta, "meta", false, "Update book metadata")
 	flag.IntVar(&plan, "plan", 0, "Update book plan with given count of chapters")
@@ -41,6 +43,15 @@ func main() {
 	if help {
 		printHelp()
 		return
+	}
+
+	if simple != "" {
+		create = true
+		meta = true
+		chapters = true
+		if plan == 0 {
+			plan = 10
+		}
 	}
 
 	if !create && !meta && !chapters && plan == 0 && chapter == 0 && !md && !html && !epub {
@@ -99,6 +110,9 @@ func main() {
 	}
 	if !ok {
 		return
+	}
+	if simple != "" {
+		v.SetPlot(simple)
 	}
 	if debug || archive {
 		v.EnableArchiving()
@@ -167,6 +181,8 @@ func printHelp() {
 	fmt.Println("        Path to the book directory (default \".\")")
 	fmt.Println("  -lang string")
 	fmt.Println("        Language of the book (default \"en\")")
+	fmt.Println("  -simple string")
+	fmt.Println("        Generate the whole book using the given prompt")
 	fmt.Println("  -create")
 	fmt.Println("        Create a new book")
 	fmt.Println("  -meta")

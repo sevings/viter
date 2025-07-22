@@ -78,6 +78,10 @@ func (v *Viter) EnableArchiving() {
 	v.book.EnableArchiving()
 }
 
+func (v *Viter) SetPlot(plot string) {
+	v.book.GetMeta().SetPlot(plot)
+}
+
 func (v *Viter) GetBook() *books.Book {
 	return v.book
 }
