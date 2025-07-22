@@ -3,14 +3,19 @@ package books
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
+	"github.com/go-shiori/go-epub"
 	"github.com/spf13/afero"
 )
 
 var (
 	ErrInvalidChapterIndex = errors.New("invalid chapter index")
 	ErrNoMetaFile          = errors.New("no meta file found")
+	ErrBookNotFinished     = errors.New("book not finished")
 )
 
 type Book struct {
@@ -326,4 +331,134 @@ func (b *Book) SetPlanCrit(planCrit *Critique) error {
 
 func (b *Book) GetPlanCrit() *Critique {
 	return b.planCrit
+}
+
+func (b *Book) ExportMarkdown() error {
+	if b.plan == nil || b.plan.Count() < len(b.chps) {
+		return ErrBookNotFinished
+	}
+
+	title := b.getTitle()
+
+	var text strings.Builder
+	text.WriteString("# ")
+	text.WriteString(title)
+	text.WriteString("\n\n")
+
+	for _, chp := range b.chps {
+		text.WriteString("### ")
+		text.WriteString(strconv.Itoa(chp.GetNumber()))
+		text.WriteString(". ")
+		text.WriteString(chp.GetTitle())
+		text.WriteString("\n\n")
+		text.WriteString(chp.GetContent())
+		text.WriteString("\n\n")
+	}
+
+	mdPath := filepath.Join(b.path, fmt.Sprintf("%s.md", title))
+	return afero.WriteFile(b.fs, mdPath, []byte(text.String()), 0644)
+}
+
+func (b *Book) ExportHTML() error {
+	if b.plan == nil || b.plan.Count() < len(b.chps) {
+		return ErrBookNotFinished
+	}
+
+	title := b.getTitle()
+
+	var text strings.Builder
+	text.WriteString("<meta charset=\"utf-8\">")
+	text.WriteString("<title>")
+	text.WriteString(title)
+	text.WriteString("</title>")
+
+	text.WriteString("<h1>")
+	text.WriteString(title)
+	text.WriteString("</h1>")
+
+	for _, chp := range b.chps {
+		text.WriteString("<h3>")
+		text.WriteString(strconv.Itoa(chp.GetNumber()))
+		text.WriteString(". ")
+		text.WriteString(chp.GetTitle())
+		text.WriteString("</h3>")
+		ps := strings.SplitSeq(chp.GetContent(), "\n")
+		for p := range ps {
+			if len(p) == 0 {
+				continue
+			}
+			text.WriteString("<p>")
+			text.WriteString(p)
+			text.WriteString("</p>")
+		}
+		text.WriteString("<hr>")
+	}
+
+	htmlPath := filepath.Join(b.path, fmt.Sprintf("%s.html", title))
+	return afero.WriteFile(b.fs, htmlPath, []byte(text.String()), 0644)
+}
+
+func (b *Book) ExportEPUB() error {
+	if b.plan == nil || b.plan.Count() < len(b.chps) {
+		return ErrBookNotFinished
+	}
+
+	title := b.getTitle()
+
+	ep, err := epub.NewEpub(title)
+	if err != nil {
+		return err
+	}
+
+	ep.SetAuthor("Viter — AI novel generator")
+	ep.SetTitle(title)
+	ep.SetDescription(strings.Join(b.meta.GetGenres(), ", "))
+
+	for _, chp := range b.chps {
+		chpTitle := fmt.Sprintf("%d. %s", chp.GetNumber(), chp.GetTitle())
+		var content strings.Builder
+		content.WriteString("<h3>")
+		content.WriteString(strconv.Itoa(chp.GetNumber()))
+		content.WriteString(". ")
+		content.WriteString(chp.GetTitle())
+		content.WriteString("</h3>")
+		ps := strings.SplitSeq(chp.GetContent(), "\n")
+		for p := range ps {
+			if len(p) == 0 {
+				continue
+			}
+			content.WriteString("<p>")
+			content.WriteString(p)
+			content.WriteString("</p>")
+		}
+		_, err = ep.AddSection(content.String(), chpTitle, "", "")
+		if err != nil {
+			return err
+		}
+	}
+
+	epubPath := filepath.Join(b.path, fmt.Sprintf("%s.epub", title))
+	f, err := b.fs.OpenFile(epubPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = ep.WriteTo(f)
+	return err
+}
+
+func (b *Book) getTitle() string {
+	title := b.meta.GetTitle()
+	if strings.Contains(title, "/") {
+		parts := strings.Split(title, "/")
+		title = parts[0]
+		for i := 1; i < len(parts); i++ {
+			if len(parts[i]) > len(title) {
+				title = parts[i]
+			}
+		}
+		title = strings.TrimSpace(title)
+	}
+	return title
 }

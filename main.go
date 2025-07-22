@@ -17,6 +17,7 @@ func main() {
 	var configPath string
 	var debug bool
 	var create, meta, chapters bool
+	var md, html, epub bool
 	var plan, chapter, iterCount int
 	var help bool
 
@@ -30,6 +31,9 @@ func main() {
 	flag.IntVar(&chapter, "chapter", 0, "Update chapter with given number")
 	flag.BoolVar(&chapters, "chapters", false, "Update all book chapters")
 	flag.IntVar(&iterCount, "iter", 5, "Update given number of times")
+	flag.BoolVar(&md, "md", false, "Export to markdown file")
+	flag.BoolVar(&html, "html", false, "Export to html file")
+	flag.BoolVar(&epub, "epub", false, "Export to epub file")
 	flag.BoolVar(&help, "help", false, "Print the help message")
 	flag.Parse()
 
@@ -38,7 +42,7 @@ func main() {
 		return
 	}
 
-	if !create && !meta && !chapters && plan == 0 && chapter == 0 {
+	if !create && !meta && !chapters && plan == 0 && chapter == 0 && !md && !html && !epub {
 		printHelp()
 		return
 	}
@@ -123,6 +127,27 @@ func main() {
 			return
 		}
 	}
+
+	if md {
+		ok = v.ExportMarkdown()
+		if !ok {
+			return
+		}
+	}
+
+	if html {
+		ok = v.ExportHTML()
+		if !ok {
+			return
+		}
+	}
+
+	if epub {
+		ok = v.ExportEPUB()
+		if !ok {
+			return
+		}
+	}
 }
 
 func printHelp() {
@@ -150,6 +175,12 @@ func printHelp() {
 	fmt.Println("        Update all book chapters")
 	fmt.Println("  -iter int")
 	fmt.Println("        Update given number of times (default 5)")
+	fmt.Println("  -epub")
+	fmt.Println("        Export to epub file")
+	fmt.Println("  -md")
+	fmt.Println("        Export to markdown file")
+	fmt.Println("  -html")
+	fmt.Println("        Export to html file")
 	fmt.Println("  -debug")
 	fmt.Println("        Enable debug mode")
 	fmt.Println("  -help")

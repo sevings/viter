@@ -212,6 +212,54 @@ func (v *Viter) UpdateAllChapters(iterCount int) bool {
 	return true
 }
 
+func (v *Viter) ExportMarkdown() bool {
+	if v.book == nil {
+		return false
+	}
+
+	err := v.book.ExportMarkdown()
+	if err != nil {
+		v.log.Errorw(err.Error())
+		return false
+	}
+
+	v.log.Info("exported markdown")
+
+	return true
+}
+
+func (v *Viter) ExportHTML() bool {
+	if v.book == nil {
+		return false
+	}
+
+	err := v.book.ExportHTML()
+	if err != nil {
+		v.log.Errorw(err.Error())
+		return false
+	}
+
+	v.log.Info("exported html")
+
+	return true
+}
+
+func (v *Viter) ExportEPUB() bool {
+	if v.book == nil {
+		return false
+	}
+
+	err := v.book.ExportEPUB()
+	if err != nil {
+		v.log.Errorw(err.Error())
+		return false
+	}
+
+	v.log.Info("exported epub")
+
+	return true
+}
+
 func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
 	v.log.Infow("writing meta")
 
