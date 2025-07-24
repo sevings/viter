@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-shiori/go-epub"
+	"github.com/iris-contrib/blackfriday"
 	"github.com/spf13/afero"
 )
 
@@ -330,9 +331,9 @@ func (b *Book) GetPlanCrit() *Critique {
 	return b.planCrit
 }
 
-func (b *Book) ExportMarkdown() error {
+func (b *Book) Markdown() (string, error) {
 	if b.plan == nil || b.plan.Count() < len(b.chps) {
-		return ErrBookNotFinished
+		return "", ErrBookNotFinished
 	}
 
 	title := b.getTitle()
@@ -352,45 +353,37 @@ func (b *Book) ExportMarkdown() error {
 		text.WriteString("\n\n")
 	}
 
-	return b.writeFile(fmt.Sprintf("%s.md", title), []byte(text.String()))
+	return text.String(), nil
+}
+
+func (b *Book) ExportMarkdown() error {
+	md, err := b.Markdown()
+	if err != nil {
+		return err
+	}
+
+	fileName := fmt.Sprintf("%s.md", b.getTitle())
+	return b.writeFile(fileName, []byte(md))
 }
 
 func (b *Book) ExportHTML() error {
-	if b.plan == nil || b.plan.Count() < len(b.chps) {
-		return ErrBookNotFinished
+	md, err := b.Markdown()
+	if err != nil {
+		return err
 	}
+
+	renderer := blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
+		Flags: blackfriday.Smartypants |
+			blackfriday.SmartypantsAngledQuotes |
+			blackfriday.SmartypantsDashes |
+			blackfriday.TOC,
+	})
+	html := blackfriday.Run([]byte(md), blackfriday.WithRenderer(renderer))
 
 	title := b.getTitle()
-
-	var text strings.Builder
-	text.WriteString("<meta charset=\"utf-8\">")
-	text.WriteString("<title>")
-	text.WriteString(title)
-	text.WriteString("</title>")
-
-	text.WriteString("<h1>")
-	text.WriteString(title)
-	text.WriteString("</h1>")
-
-	for _, chp := range b.chps {
-		text.WriteString("<h3>")
-		text.WriteString(strconv.Itoa(chp.GetNumber()))
-		text.WriteString(". ")
-		text.WriteString(chp.GetTitle())
-		text.WriteString("</h3>")
-		ps := strings.SplitSeq(chp.GetContent(), "\n")
-		for p := range ps {
-			if len(p) == 0 {
-				continue
-			}
-			text.WriteString("<p>")
-			text.WriteString(p)
-			text.WriteString("</p>")
-		}
-		text.WriteString("<hr>")
-	}
-
-	return b.writeFile(fmt.Sprintf("%s.html", title), []byte(text.String()))
+	html = fmt.Appendf(nil, "<html><meta charset=\"utf-8\"><head><title>\n%s\n</title></head>\n<body>\n%s\n</body></html>", title, string(html))
+	fileName := fmt.Sprintf("%s.html", title)
+	return b.writeFile(fileName, html)
 }
 
 func (b *Book) ExportEPUB() error {
@@ -411,22 +404,16 @@ func (b *Book) ExportEPUB() error {
 
 	for _, chp := range b.chps {
 		chpTitle := fmt.Sprintf("%d. %s", chp.GetNumber(), chp.GetTitle())
-		var content strings.Builder
-		content.WriteString("<h3>")
-		content.WriteString(strconv.Itoa(chp.GetNumber()))
-		content.WriteString(". ")
-		content.WriteString(chp.GetTitle())
-		content.WriteString("</h3>")
-		ps := strings.SplitSeq(chp.GetContent(), "\n")
-		for p := range ps {
-			if len(p) == 0 {
-				continue
-			}
-			content.WriteString("<p>")
-			content.WriteString(p)
-			content.WriteString("</p>")
-		}
-		_, err = ep.AddSection(content.String(), chpTitle, "", "")
+		content := fmt.Sprintf("### %s\n\n%s\n\n", chpTitle, chp.GetContent())
+
+		renderer := blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
+			Flags: blackfriday.Smartypants |
+				blackfriday.SmartypantsAngledQuotes |
+				blackfriday.SmartypantsDashes,
+		})
+		html := blackfriday.Run([]byte(content), blackfriday.WithRenderer(renderer))
+
+		_, err = ep.AddSection(string(html), chpTitle, "", "")
 		if err != nil {
 			return err
 		}
