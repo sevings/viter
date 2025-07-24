@@ -36,10 +36,14 @@ func (d *Diff) Text() string {
 
 	lines := make([]string, maxIndex)
 	for i := 1; i <= maxIndex; i++ {
-		if line, exists := d.parts[i]; exists {
-			lines[i-1] = line
+		lines[i-1] = d.parts[i]
+	}
+	for i := 1; i < len(lines); i++ {
+		if lines[i] != "" && lines[i-1] != "" {
+			lines[i-1] += "\n"
 		}
 	}
+	lines[len(lines)-1] += "\n"
 
 	return strings.Join(lines, "\n")
 }
