@@ -2,6 +2,7 @@ package viter
 
 import (
 	"viter/internal/books"
+	"viter/internal/neural"
 
 	"github.com/spf13/afero"
 	"github.com/tmc/langchaingo/llms"
@@ -277,21 +278,12 @@ func (v *Viter) ExportEPUB() bool {
 func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
 	v.log.Infow("writing meta")
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.WriteMetaPrompt()),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(prevMeta.String()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.WriteMetaPrompt())
+	hst.AddMessage()
+	hst.AddText(prevMeta.String())
 
-	metaData, ok := v.tg.GenerateText(messages)
+	metaData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -310,21 +302,12 @@ func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
 func (v *Viter) critiqueMeta(meta *books.BookMeta) (*books.Critique, bool) {
 	v.log.Infow("critiquing meta")
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.CritiqueMetaPrompt()),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(meta.String()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.CritiqueMetaPrompt())
+	hst.AddMessage()
+	hst.AddText(meta.String())
 
-	critData, ok := v.tg.GenerateText(messages)
+	critData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -347,23 +330,14 @@ func (v *Viter) critiqueMeta(meta *books.BookMeta) (*books.Critique, bool) {
 func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique) (*books.BookMeta, bool) {
 	v.log.Infow("updating meta")
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.WriteMetaPrompt()),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(prevMeta.String()),
-			llms.TextPart(crit.GetImprovements()),
-			llms.TextPart(v.pp.UpdateMetaPrompt()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.WriteMetaPrompt())
+	hst.AddMessage()
+	hst.AddText(prevMeta.String())
+	hst.AddText(crit.GetImprovements())
+	hst.AddText(v.pp.UpdateMetaPrompt())
 
-	metaData, ok := v.tg.GenerateText(messages)
+	metaData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -382,24 +356,15 @@ func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique) (*boo
 func (v *Viter) writePlan(prevPlan books.Plan, chapterCount int) (books.Plan, bool) {
 	v.log.Infow("writing plan", "chapters", chapterCount)
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.WritePlanPrompt(chapterCount)),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.book.GetMeta().String()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.WritePlanPrompt(chapterCount))
+	hst.AddMessage()
+	hst.AddText(v.book.GetMeta().String())
 	if len(prevPlan) > 0 {
-		messages[1].Parts = append(messages[1].Parts, llms.TextPart(prevPlan.String()))
+		hst.AddText(prevPlan.String())
 	}
 
-	planData, ok := v.tg.GenerateText(messages)
+	planData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -418,22 +383,13 @@ func (v *Viter) writePlan(prevPlan books.Plan, chapterCount int) (books.Plan, bo
 func (v *Viter) critiquePlan(plan books.Plan) (*books.Critique, bool) {
 	v.log.Infow("critiquing plan")
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.CritiquePlanPrompt()),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.book.GetMeta().String()),
-			llms.TextPart(plan.String()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.CritiquePlanPrompt())
+	hst.AddMessage()
+	hst.AddText(v.book.GetMeta().String())
+	hst.AddText(plan.String())
 
-	critData, ok := v.tg.GenerateText(messages)
+	critData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -456,24 +412,15 @@ func (v *Viter) critiquePlan(plan books.Plan) (*books.Critique, bool) {
 func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique) (books.Plan, bool) {
 	v.log.Infow("updating plan")
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.WritePlanPrompt(0)),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.book.GetMeta().String()),
-			llms.TextPart(prevPlan.String()),
-			llms.TextPart(crit.GetImprovements()),
-			llms.TextPart(v.pp.UpdatePlanPrompt()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.WritePlanPrompt(0))
+	hst.AddMessage()
+	hst.AddText(v.book.GetMeta().String())
+	hst.AddText(prevPlan.String())
+	hst.AddText(crit.GetImprovements())
+	hst.AddText(v.pp.UpdatePlanPrompt())
 
-	planData, ok := v.tg.GenerateText(messages)
+	planData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -492,37 +439,29 @@ func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique) (books.Pla
 func (v *Viter) writeChapter(n int) (*books.Chapter, bool) {
 	v.log.Infow("writing chapter")
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.WriteChapterPrompt()),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.book.GetMeta().String()),
-			llms.TextPart(v.book.GetPlan().String()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.WriteChapterPrompt())
+	hst.AddMessage()
+	hst.AddText(v.book.GetMeta().String())
+	hst.AddText(v.book.GetPlan().String())
 	for i := 1; i < n; i++ {
 		chp, err := v.book.GetChapter(i)
 		if err != nil {
 			v.log.Warnw(err.Error())
 			continue
 		}
-		messages[1].Parts = append(messages[1].Parts, llms.TextPart(chp.String()))
+		hst.AddText(chp.String())
 	}
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.WriteNChapterPrompt(n)))
+	hst.AddText(v.pp.WriteNChapterPrompt(n))
+
 	planChp, err := v.book.GetPlanChapter(n)
 	if err != nil {
 		v.log.Warnw(err.Error())
 		return nil, false
 	}
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(planChp.String()))
+	hst.AddText(planChp.String())
 
-	chapterData, ok := v.tg.GenerateText(messages)
+	chapterData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -542,32 +481,23 @@ func (v *Viter) writeChapter(n int) (*books.Chapter, bool) {
 func (v *Viter) critiqueChapter(chapter *books.Chapter) (*books.Critique, bool) {
 	v.log.Infow("critiquing chapter")
 
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.CritiqueChapterPrompt()),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.book.GetMeta().String()),
-			llms.TextPart(v.book.GetPlan().String()),
-		},
-	}
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.CritiqueChapterPrompt())
+	hst.AddMessage()
+	hst.AddText(v.book.GetMeta().String())
+	hst.AddText(v.book.GetPlan().String())
 	for i := 1; i < chapter.GetNumber(); i++ {
 		chp, err := v.book.GetChapter(i)
 		if err != nil {
 			v.log.Warnw(err.Error())
 			continue
 		}
-		messages[1].Parts = append(messages[1].Parts, llms.TextPart(chp.String()))
+		hst.AddText(chp.String())
 	}
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(chapter.String()))
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.CritiqueNChapterPrompt(chapter.GetNumber())))
+	hst.AddText(chapter.String())
+	hst.AddText(v.pp.CritiqueNChapterPrompt(chapter.GetNumber()))
 
-	critData, ok := v.tg.GenerateText(messages)
+	critData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -591,33 +521,25 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*bo
 	v.log.Infow("updating chapter", "n", prevChp.GetNumber())
 
 	prevDiff := books.DiffFromText(prevChp.String())
-	messages := make([]llms.MessageContent, 2)
-	messages[0] = llms.MessageContent{
-		Role: llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.pp.UpdateChapterPrompt()),
-		},
-	}
-	messages[1] = llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextPart(v.book.GetMeta().String()),
-			llms.TextPart(v.book.GetPlan().String()),
-		},
-	}
+
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.UpdateChapterPrompt())
+	hst.AddMessage()
+	hst.AddText(v.book.GetMeta().String())
+	hst.AddText(v.book.GetPlan().String())
 	for i := 1; i < prevChp.GetNumber(); i++ {
 		chp, err := v.book.GetChapter(i)
 		if err != nil {
 			v.log.Warnw(err.Error())
 			continue
 		}
-		messages[1].Parts = append(messages[1].Parts, llms.TextPart(chp.String()))
+		hst.AddText(chp.String())
 	}
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(prevDiff.String()))
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(v.pp.UpdateNChapterPrompt(prevChp.GetNumber())))
-	messages[1].Parts = append(messages[1].Parts, llms.TextPart(crit.GetImprovements()))
+	hst.AddText(prevDiff.String())
+	hst.AddText(v.pp.UpdateNChapterPrompt(prevChp.GetNumber()))
+	hst.AddText(crit.GetImprovements())
 
-	diffData, ok := v.tg.GenerateText(messages)
+	diffData, ok := v.tg.GenerateText(hst.Messages())
 	if !ok {
 		return nil, false
 	}
