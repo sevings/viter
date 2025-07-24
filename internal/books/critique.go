@@ -31,30 +31,17 @@ func CritiqueFromString(s string) (*Critique, error) {
 		return c, nil
 	}
 
+	sep := "\n##"
+	if !strings.Contains(s, sep) {
+		sep = "\n**"
+	}
+
 	// Split by sections
-	sections := strings.SplitSeq(s, "\n## ")
+	sections := strings.SplitSeq(s, sep)
 	for section := range sections {
 		section = strings.TrimSpace(section)
 		if section == "" {
 			continue
-		}
-
-		// Add back the ## if it was removed by split
-		if !strings.HasPrefix(section, "## ") {
-			section = "## " + section
-		}
-
-		// Handle "## Score" format with number on same or next line
-		if strings.HasPrefix(section, "## Score") {
-			// Check if score is on same line after space
-			if len(section) > 8 && section[8] == ' ' {
-				scoreStr := strings.TrimSpace(section[9:])
-				if score, err := strconv.Atoi(scoreStr); err == nil {
-					c.Score = score
-				}
-			} else {
-				// Score might be on next line, so don't continue - let it fall through
-			}
 		}
 
 		lines := strings.SplitN(section, "\n", 2)
@@ -62,18 +49,17 @@ func CritiqueFromString(s string) (*Critique, error) {
 			continue
 		}
 
-		header := strings.TrimSpace(lines[0])
+		header := trimTitle(lines[0])
 		content := strings.TrimSpace(lines[1])
 
 		switch header {
-		case "## Strengths":
+		case "Strengths":
 			c.Strengths = content
-		case "## Improvements":
+		case "Improvements":
 			c.Improvements = content
-		case "## Impressions":
+		case "Impressions":
 			c.Impressions = content
-		case "## Score":
-			// Handle "## Score\n6" format (score on next line)
+		case "Score":
 			if score, err := strconv.Atoi(content); err == nil {
 				c.Score = score
 			}

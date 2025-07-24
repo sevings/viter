@@ -67,42 +67,37 @@ func MetaFromString(s string) (*BookMeta, error) {
 			continue
 		}
 
-		// Add back the ## if it was removed by split
-		if !strings.HasPrefix(section, "## ") {
-			section = "## " + section
-		}
-
 		lines := strings.SplitN(section, "\n", 2)
 		if len(lines) < 2 {
 			continue
 		}
 
-		header := strings.TrimSpace(lines[0])
+		header := trimTitle(lines[0])
 		content := strings.TrimSpace(lines[1])
 
 		switch header {
-		case "## Style":
+		case "Style":
 			meta.style = content
-		case "## Genres":
+		case "Genres":
 			genres := strings.Split(content, ",")
 			for i, genre := range genres {
 				genres[i] = strings.TrimSpace(genre)
 			}
 			meta.genres = genres
-		case "## Logline":
+		case "Logline":
 			meta.logline = content
-		case "## World":
+		case "World":
 			meta.world = content
-		case "## Protagonists":
+		case "Protagonists":
 			meta.protagonists = parseCharacters(content)
-		case "## Antagonists":
+		case "Antagonists":
 			meta.antagonists = parseCharacters(content)
-		case "## Minor Characters":
+		case "Minor Characters":
 			meta.minorChars = parseCharacters(content)
-		case "## Plot":
+		case "Plot":
 			meta.plot = content
-		case "## Title":
-			meta.title = content
+		case "Title":
+			meta.title = trimTitle(content)
 		}
 	}
 
@@ -120,17 +115,12 @@ func parseCharacters(s string) []Character {
 			continue
 		}
 
-		// Add back the ### if it was removed by split
-		if !strings.HasPrefix(part, "### ") {
-			part = "### " + part
-		}
-
 		lines := strings.SplitN(part, "\n", 2)
 		if len(lines) < 2 {
 			continue
 		}
 
-		name := strings.TrimSpace(strings.TrimPrefix(lines[0], "### "))
+		name := trimTitle(lines[0])
 		desc := strings.TrimSpace(lines[1])
 
 		if name != "" {

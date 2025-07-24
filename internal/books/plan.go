@@ -13,6 +13,7 @@ type Plan []*Chapter
 func PlanFromString(s string) (Plan, error) {
 	var plan Plan
 
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return Plan{}, nil
 	}

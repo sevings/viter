@@ -112,12 +112,12 @@ func (v *Viter) UpdateMeta(iterCount int) bool {
 	for ; i < iterCount; i++ {
 		meta, ok := v.updateMeta(v.book.GetMeta(), v.book.GetMetaCrit())
 		if !ok {
-			return false
+			continue
 		}
 		meta = v.book.GetMeta().MergedCopy(meta)
 		crit, ok := v.critiqueMeta(meta)
 		if !ok {
-			return false
+			continue
 		}
 		v.book.SetMeta(meta)
 		v.book.SetMetaCrit(crit)
@@ -152,12 +152,12 @@ func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
 	for ; i < iterCount; i++ {
 		plan, ok := v.updatePlan(v.book.GetPlan(), v.book.GetPlanCrit())
 		if !ok {
-			return false
+			continue
 		}
 		plan = v.book.GetPlan().MergedCopy(plan)
 		crit, ok := v.critiquePlan(plan)
 		if !ok {
-			return false
+			continue
 		}
 		v.book.SetPlan(plan)
 		v.book.SetPlanCrit(crit)
@@ -199,11 +199,11 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 		crit, _ := v.book.GetChapterCritique(nChapter)
 		chapter, ok := v.updateChapter(chp, crit)
 		if !ok {
-			return false
+			continue
 		}
 		crit, ok = v.critiqueChapter(chapter)
 		if !ok {
-			return false
+			continue
 		}
 		v.book.SetChapter(nChapter, chapter)
 		v.book.SetChapterCritique(nChapter, crit)

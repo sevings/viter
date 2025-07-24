@@ -70,6 +70,7 @@ func ChapterFromString(s string) (*Chapter, error) {
 		// No number format found, use whole string as title
 		title = titleText
 	}
+	title = trimTitle(title)
 
 	// Content is everything after the title line
 	var content strings.Builder

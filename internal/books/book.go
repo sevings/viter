@@ -20,6 +20,10 @@ var (
 	ErrFileNotFound        = errors.New("file not found")
 )
 
+func trimTitle(s string) string {
+	return strings.Trim(s, "#*\"«» \n\r\t")
+}
+
 type Book struct {
 	fs   afero.Fs
 	path string

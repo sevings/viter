@@ -92,9 +92,20 @@ func (llm *LLM) EnableResponseLogging(fs afero.Fs, path string) {
 
 func (llm *LLM) GenerateText(messages []llms.MessageContent) (string, bool) {
 	resp, ok := llm.generate(messages, 0)
-	if ok {
-		llm.logResponse(resp)
+	if !ok {
+		return "", false
 	}
+
+	llm.logResponse(resp)
+
+	if resp[:7] == "<think>" {
+		i := strings.Index(resp, "</think>")
+		if i > 0 {
+			resp = resp[i+8:]
+			resp = strings.TrimSpace(resp)
+		}
+	}
+
 	return resp, ok
 }
 
