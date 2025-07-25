@@ -17,9 +17,9 @@ func main() {
 	var configPath string
 	var debug bool
 	var simple string
-	var create, meta, chapters bool
+	var create, meta, chapters, correctall bool
 	var md, html, epub, archive bool
-	var plan, chapter, iterCount int
+	var plan, chapter, iterCount, maxLen, correct int
 	var help bool
 
 	flag.StringVar(&path, "path", ".", "Path to the book directory")
@@ -32,7 +32,10 @@ func main() {
 	flag.IntVar(&plan, "plan", 0, "Update book plan with given count of chapters")
 	flag.IntVar(&chapter, "chapter", 0, "Update chapter with given number")
 	flag.BoolVar(&chapters, "chapters", false, "Update all book chapters")
+	flag.BoolVar(&correctall, "correctall", false, "Correct all chapters")
+	flag.IntVar(&correct, "correct", 0, "Correct chapter with given number")
 	flag.IntVar(&iterCount, "iter", 5, "Update given number of times")
+	flag.IntVar(&maxLen, "maxlen", 10000, "Maximum length of a text part to correct")
 	flag.BoolVar(&archive, "archive", false, "Make an archive copy of each file version")
 	flag.BoolVar(&md, "md", false, "Export to markdown file")
 	flag.BoolVar(&html, "html", false, "Export to html file")
@@ -54,7 +57,7 @@ func main() {
 		}
 	}
 
-	if !create && !meta && !chapters && plan == 0 && chapter == 0 && !md && !html && !epub {
+	if !create && !meta && !chapters && plan == 0 && chapter == 0 && correct == 0 && !md && !html && !epub {
 		printHelp()
 		return
 	}
@@ -146,6 +149,13 @@ func main() {
 		}
 	}
 
+	if correct > 0 {
+		ok = v.CorrectChapter(correct, maxLen)
+		if !ok {
+			return
+		}
+	}
+
 	if md {
 		ok = v.ExportMarkdown()
 		if !ok {
@@ -193,8 +203,14 @@ func printHelp() {
 	fmt.Println("        Update chapter with given number")
 	fmt.Println("  -chapters")
 	fmt.Println("        Update all book chapters")
+	fmt.Println("  -correct int")
+	fmt.Println("        Correct chapter with given number")
+	fmt.Println("  -correctall")
+	fmt.Println("        Correct all chapters")
 	fmt.Println("  -iter int")
 	fmt.Println("        Update given number of times (default 5)")
+	fmt.Println("  -maxlen int")
+	fmt.Println("        Maximum length of a text part to correct (default 10000)")
 	fmt.Println("  -archive")
 	fmt.Println("        Make an archive copy of each file version")
 	fmt.Println("  -epub")

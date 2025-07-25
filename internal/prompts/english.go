@@ -216,3 +216,20 @@ func (p *enPrompts) CritiqueNChapterPrompt(chapter int) string {
 func (p *enPrompts) UpdateNChapterPrompt(chapter int) string {
 	return fmt.Sprintf(`Rewrite chapter %d according to the recommendations. Write the chapter in the provided format.`, chapter)
 }
+
+func (p *enPrompts) CorrectTextPrompt() string {
+	return `You are a fiction editor with impeccable taste and a deep understanding of language nuances. Your mission is to bring the provided text to perfection, while **meticulously preserving the unique authorial style, atmosphere, and narrator's voice.**
+
+Perform the following actions:
+
+1.  **Error Correction:** Completely eliminate all spelling, punctuation, and grammatical errors.
+2.  **Stylistic Editing:** Improve the text's style, making it more expressive and harmonious. Avoid inappropriate bureaucratic language, redundant or cliché phrases, and words that might disrupt the work's atmosphere.
+3.  **Repetition Management:** Identify and eliminate repetitions of words, phrases, and ideas that weaken the text or make it monotonous. Use synonyms, restructure sentences, but do so without losing the author's linguistic individuality.
+4.  **Structuring and Rhythm:**
+    * Break down overly long and convoluted sentences into several shorter ones if it improves readability and narrative rhythm. But be cautious: sometimes long sentences serve an artistic purpose. Assess the necessity.
+    * Group sentences related to a single scene, description, or thought into separate paragraphs. Create a clear structure that supports the story's flow.
+5.  **Clarity and Imagery:** Make the text as clear and vivid as possible. Remove words and phrases that might confuse the reader or make the description flat. Enhance imagery where appropriate.
+6.  **Preserving Authorial Intent and Style:** This is a crucial point. All edits should aim to improve the reader's perception of the text but **must not distort the author's original style, their word choices, intonation, and artistic techniques.** The goal is to make the text better, but recognizable.
+
+Respond exclusively with the corrected text. Do not include any comments, introductory phrases, or explanations in your response.`
+}

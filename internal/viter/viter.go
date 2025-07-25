@@ -1,6 +1,7 @@
 package viter
 
 import (
+	"strings"
 	"viter/internal/books"
 	"viter/internal/neural"
 
@@ -22,6 +23,7 @@ type PromptProvider interface {
 	WriteNChapterPrompt(chapter int) string
 	CritiqueNChapterPrompt(chapter int) string
 	UpdateNChapterPrompt(chapter int) string
+	CorrectTextPrompt() string
 }
 
 type TextGenerator interface {
@@ -220,6 +222,40 @@ func (v *Viter) UpdateAllChapters(iterCount int) bool {
 
 	for i := 1; i <= v.book.GetPlan().Count(); i++ {
 		if !v.UpdateChapter(i, iterCount) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (v *Viter) CorrectChapter(nChapter int, maxLen int) bool {
+	if v.book == nil || v.book.GetPlan() == nil {
+		return false
+	}
+
+	chp, _ := v.book.GetChapter(nChapter)
+	if chp.GetContent() == "" {
+		v.log.Info("chapter is empty", "n", nChapter)
+		return true
+	}
+
+	if !v.correctChapterText(chp, maxLen) {
+		return false
+	}
+
+	v.book.SetChapter(nChapter, chp)
+
+	return true
+}
+
+func (v *Viter) CorrectAllChapters(maxLen int) bool {
+	if v.book == nil || v.book.GetPlan() == nil {
+		return false
+	}
+
+	for i := 1; i <= v.book.GetPlan().Count(); i++ {
+		if !v.CorrectChapter(i, maxLen) {
 			return false
 		}
 	}
@@ -561,4 +597,117 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*bo
 	v.log.Infow("updated chapter", "n", chp.GetNumber())
 
 	return chp, true
+}
+
+func (v *Viter) correctChapterText(chp *books.Chapter, maxLen int) bool {
+	v.log.Infow("correcting chapter text", "n", chp.GetNumber(), "len", len(chp.GetContent()), "max", maxLen)
+
+	if len(chp.GetContent()) <= maxLen {
+		res, ok := v.correctText(chp.GetContent())
+		if !ok {
+			return false
+		}
+		chp.SetContent(res)
+		v.log.Infow("corrected chapter text", "n", chp.GetNumber())
+		return true
+	}
+
+	correctedContent := ""
+	{
+		result := ""
+		part := ""
+		ps := strings.SplitSeq(chp.GetContent(), "\n")
+		for p := range ps {
+			if p == "" {
+				continue
+			}
+
+			if len(part) == 0 {
+				part = p
+			} else if len(part)+len(p)+1 > maxLen {
+				ok := false
+				part, ok = v.correctText(part)
+				if !ok {
+					return false
+				}
+				result += part + "\n\n"
+				part = p
+			} else {
+				part += "\n\n" + p
+			}
+		}
+
+		if len(part) > 0 {
+			ok := false
+			part, ok = v.correctText(part)
+			if !ok {
+				return false
+			}
+			result += part
+		}
+
+		correctedContent = result
+	}
+
+	{
+		result := ""
+		part := ""
+		ps := strings.Split(correctedContent, "\n")
+		for i := len(ps) - 1; i >= 0; i-- {
+			p := ps[i]
+			if p == "" {
+				continue
+			}
+
+			if len(part) == 0 {
+				part = p
+			} else if len(part)+len(p)+1 > maxLen {
+				ok := false
+				part, ok = v.correctText(part)
+				if !ok {
+					return false
+				}
+				result = part + "\n\n" + result
+				part = p
+			} else {
+				part = p + "\n\n" + part
+			}
+		}
+
+		if len(part) > 0 {
+			ok := false
+			part, ok = v.correctText(part)
+			if !ok {
+				return false
+			}
+			result = part + "\n\n" + result
+		}
+
+		correctedContent = result
+	}
+
+	correctedContent = strings.TrimSpace(correctedContent)
+	chp.SetContent(correctedContent)
+
+	v.log.Infow("corrected chapter text", "n", chp.GetNumber(), "len", len(correctedContent))
+
+	return true
+}
+
+func (v *Viter) correctText(text string) (string, bool) {
+	v.log.Infow("correcting text", "len", len(text))
+
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.CorrectTextPrompt())
+	hst.AddMessage()
+	hst.AddText(text)
+
+	correctedData, ok := v.tg.GenerateText(hst.Messages())
+	if !ok {
+		return "", false
+	}
+
+	v.log.Infow("corrected text", "len", len(correctedData))
+
+	return correctedData, true
 }

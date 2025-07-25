@@ -27,6 +27,7 @@ type mockPromptProvider struct {
 	writeNChapterPrompt    string
 	critiqueNChapterPrompt string
 	updateNChapterPrompt   string
+	correctTextPrompt      string
 }
 
 func (m *mockPromptProvider) WriteMetaPrompt() string {
@@ -77,10 +78,16 @@ func (m *mockPromptProvider) UpdateNChapterPrompt(chapter int) string {
 	return fmt.Sprintf(m.updateNChapterPrompt, chapter)
 }
 
+func (m *mockPromptProvider) CorrectTextPrompt() string {
+	return m.correctTextPrompt
+}
+
 type mockTextGenerator struct {
-	responses  []string
-	callCount  int
-	shouldFail bool
+	responses       []string
+	callCount       int
+	shouldFail      bool
+	infiniteMode    bool
+	defaultResponse string
 }
 
 func (m *mockTextGenerator) GenerateText(messages []llms.MessageContent) (string, bool) {
@@ -89,6 +96,13 @@ func (m *mockTextGenerator) GenerateText(messages []llms.MessageContent) (string
 	}
 
 	if m.callCount >= len(m.responses) {
+		if m.infiniteMode {
+			m.callCount++
+			if m.defaultResponse != "" {
+				return m.defaultResponse, true
+			}
+			return fmt.Sprintf("Generated response %d", m.callCount), true
+		}
 		return "", false
 	}
 
@@ -125,6 +139,7 @@ func createTestPromptProvider() *mockPromptProvider {
 		writeNChapterPrompt:    "Write chapter %d prompt",
 		critiqueNChapterPrompt: "Critique chapter %d prompt",
 		updateNChapterPrompt:   "Update chapter %d prompt",
+		correctTextPrompt:      "Correct text prompt",
 	}
 }
 
@@ -754,4 +769,476 @@ func TestViter_FullWorkflow(t *testing.T) {
 	require.True(t, v.UpdateChapter(1, 1))
 
 	require.Equal(t, 6, tg.callCount) // All operations completed successfully
+}
+
+func TestViter_CorrectChapter_NoBook(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Should fail when no book is loaded
+	result := v.CorrectChapter(1, 1000)
+	require.False(t, result)
+}
+
+func TestViter_CorrectChapter_NoPlan(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Create book without plan
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+
+	// Should fail when no plan exists
+	result := v.CorrectChapter(1, 1000)
+	require.False(t, result)
+}
+
+func TestViter_CorrectChapter_SmallText(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Test Chapter", "Test chapter content."),
+			createValidCritiqueResponse(8),
+			"Corrected small text content.",
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapter
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(3, 1))
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Correct chapter with maxLen larger than content
+	result := v.CorrectChapter(1, 1000)
+	require.True(t, result)
+	require.Equal(t, 7, tg.callCount) // Should have made 6 setup calls + 1 correction call
+
+	// Verify chapter content was updated
+	book := v.GetBook()
+	chp, err := book.GetChapter(1)
+	require.NoError(t, err)
+	require.Equal(t, "Corrected small text content.", chp.GetContent())
+}
+
+func TestViter_CorrectAllChapters_NoBook(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Should fail when no book is loaded
+	result := v.CorrectAllChapters(1000)
+	require.False(t, result)
+}
+
+func TestViter_CorrectAllChapters_NoPlan(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Create book without plan
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+
+	// Should fail when no plan exists
+	result := v.CorrectAllChapters(1000)
+	require.False(t, result)
+}
+
+func TestViter_CorrectAllChapters_Success(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Chapter 1", "First chapter content."),
+			createValidCritiqueResponse(8),
+			createValidChapterResponse(2, "Chapter 2", "Second chapter content."),
+			createValidCritiqueResponse(8),
+			createValidChapterResponse(3, "Chapter 3", "Third chapter content."),
+			createValidCritiqueResponse(8),
+			"Corrected first chapter content.",
+			"Corrected second chapter content.",
+			"Corrected third chapter content.",
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapters
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(3, 1))
+	require.True(t, v.UpdateAllChapters(1))
+
+	// Correct all chapters
+	result := v.CorrectAllChapters(1000)
+	require.True(t, result)
+
+	// Verify all chapters were corrected
+	book := v.GetBook()
+	for i := 1; i <= 3; i++ {
+		chp, err := book.GetChapter(i)
+		require.NoError(t, err)
+		require.Contains(t, chp.GetContent(), "Corrected")
+	}
+}
+
+func TestViter_CorrectChapter_LargeText_SplitByLines(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Test Chapter", "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"),
+			createValidCritiqueResponse(8),
+		},
+		infiniteMode:    true,
+		defaultResponse: "Corrected text",
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapter containing large text
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Correct chapter with maxLen that forces splitting
+	maxLen := 15 // Small enough to force splitting
+	result := v.CorrectChapter(1, maxLen)
+	if !result {
+		t.Logf("CorrectChapter failed, tg.callCount: %d", tg.callCount)
+	}
+	require.True(t, result)
+
+	// Verify chapter content was processed
+	book := v.GetBook()
+	chp, err := book.GetChapter(1)
+	require.NoError(t, err)
+	content := chp.GetContent()
+
+	// Should contain corrected content
+	require.Contains(t, content, "Corrected")
+}
+
+func TestViter_CorrectChapter_TextGeneratorFailure(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Test Chapter", "Test content to correct."),
+			createValidCritiqueResponse(8),
+			"Should not be called", // This shouldn't be reached due to shouldFail
+		},
+		shouldFail: false, // Start with success for setup
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapter
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+
+	// Setup the chapter successfully first
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Now enable failure for correction attempts
+	tg.shouldFail = true
+
+	// Correction should fail when text generator fails
+	result := v.CorrectChapter(1, 1000)
+	require.False(t, result)
+}
+
+func TestViter_CorrectChapter_EmptyContent(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Empty Chapter", ""),
+			createValidCritiqueResponse(8),
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with empty chapter
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Correct empty chapter
+	result := v.CorrectChapter(1, 1000)
+	require.True(t, result)
+
+	// Verify content was set
+	book := v.GetBook()
+	chp, err := book.GetChapter(1)
+	require.NoError(t, err)
+	require.Equal(t, "", chp.GetContent())
+}
+
+func TestViter_CorrectChapter_SingleLineLongerThanMaxLen(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+
+	longLine := "This is a very long line that exceeds the maximum length limit and should be handled properly by the correction function"
+
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Long Line Chapter", longLine),
+			createValidCritiqueResponse(8),
+		},
+		infiniteMode:    true,
+		defaultResponse: "Corrected content",
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapter containing single long line
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Correct chapter with maxLen smaller than the line length
+	maxLen := 50 // Smaller than longLine length
+	result := v.CorrectChapter(1, maxLen)
+	require.True(t, result)
+
+	// Verify correction was applied
+	book := v.GetBook()
+	chp, err := book.GetChapter(1)
+	require.NoError(t, err)
+	require.Equal(t, "Corrected content", chp.GetContent())
+}
+
+func TestViter_CorrectChapter_MultipleNewlines(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+
+	contentWithMultipleNewlines := "Line 1\n\n\nLine 2\n\nLine 3\n\n\n\nLine 4"
+
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Multiple Newlines", contentWithMultipleNewlines),
+			createValidCritiqueResponse(8),
+		},
+		infiniteMode:    true,
+		defaultResponse: "Corrected part",
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapter containing multiple newlines
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Correct chapter with maxLen that forces splitting
+	maxLen := 25
+	result := v.CorrectChapter(1, maxLen)
+	require.True(t, result)
+
+	// Verify content was corrected
+	book := v.GetBook()
+	chp, err := book.GetChapter(1)
+	require.NoError(t, err)
+	content := chp.GetContent()
+	require.Contains(t, content, "Corrected")
+}
+
+func TestViter_CorrectChapterText_Bug_Isolation(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+
+	// Simple case that should require multiple correction calls due to splitting
+	// Test case that will expose the second loop bug
+	// Create content that will trigger both loops
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Test Chapter", "Line1\nLine2\nLine3\nLine4"),
+			createValidCritiqueResponse(8),
+			"Corrected1", // First pass corrections
+			"Corrected2",
+			"Corrected3",
+			"Corrected4", // Second pass corrections
+			"Corrected5",
+			"Corrected6",
+			"Corrected7", // Extra responses for safety
+			"Corrected8",
+			"Corrected9",
+			"Corrected10",
+		},
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapter
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Record call count before correction
+	callsBefore := tg.callCount
+	t.Logf("Calls before correction: %d", callsBefore)
+
+	// Get original content for comparison
+	book := v.GetBook()
+	chp, err := book.GetChapter(1)
+	require.NoError(t, err)
+	originalContent := chp.GetContent()
+	t.Logf("Original content: %q", originalContent)
+	t.Logf("Original content length: %d", len(originalContent))
+
+	// Correct chapter with very small maxLen to force splitting
+	maxLen := 10 // Very small to force multiple splits
+	result := v.CorrectChapter(1, maxLen)
+
+	callsAfter := tg.callCount
+	correctionCalls := callsAfter - callsBefore
+	t.Logf("Calls after correction: %d", callsAfter)
+	t.Logf("Correction calls made: %d", correctionCalls)
+
+	if !result {
+		t.Logf("CorrectChapter failed")
+	}
+
+	// Get final content
+	chp, err = book.GetChapter(1)
+	require.NoError(t, err)
+	finalContent := chp.GetContent()
+	t.Logf("Final content: %q", finalContent)
+	t.Logf("Final content length: %d", len(finalContent))
+
+	require.True(t, result)
+}
+
+func TestViter_CorrectChapterText_SecondLoopBug(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+
+	// Test case that will expose the second loop bug
+	// Create content that will trigger both loops
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Test Chapter", "A\nB\nC\nD\nE"),
+			createValidCritiqueResponse(8),
+		},
+		infiniteMode:    true,
+		defaultResponse: "Corrected",
+	}
+
+	v, ok := viter.NewViter(cfg, pp, tg)
+	require.True(t, ok)
+
+	// Setup book with chapter
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+	require.True(t, v.UpdateChapter(1, 1))
+
+	// Get the chapter and verify initial content
+	book := v.GetBook()
+	chp, err := book.GetChapter(1)
+	require.NoError(t, err)
+	originalContent := chp.GetContent()
+	t.Logf("Original content: %q (len=%d)", originalContent, len(originalContent))
+
+	// Use maxLen that will cause splitting and trigger the buggy second loop
+	maxLen := 3 // Very small to force multiple corrections
+	result := v.CorrectChapter(1, maxLen)
+
+	// This should fail due to the second loop bug
+	t.Logf("Correction result: %v", result)
+	t.Logf("Final call count: %d", tg.callCount)
+
+	// After fixing the bugs, this should now succeed
+	require.True(t, result, "Expected success after fixing second loop bugs")
 }
