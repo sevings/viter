@@ -77,6 +77,9 @@ func ChapterFromString(s string) (*Chapter, error) {
 	for i := titleLine + 1; i < len(lines); i++ {
 		if i > titleLine+1 {
 			content.WriteString("\n")
+			if lines[i] != "" && lines[i-1] != "" {
+				content.WriteString("\n")
+			}
 		}
 		content.WriteString(lines[i])
 	}

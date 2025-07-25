@@ -38,12 +38,6 @@ func (d *Diff) Text() string {
 	for i := 1; i <= maxIndex; i++ {
 		lines[i-1] = d.parts[i]
 	}
-	for i := 1; i < len(lines); i++ {
-		if lines[i] != "" && lines[i-1] != "" {
-			lines[i-1] += "\n"
-		}
-	}
-	lines[len(lines)-1] += "\n"
 
 	return strings.Join(lines, "\n")
 }
