@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-shiori/go-epub"
-	"github.com/iris-contrib/blackfriday"
+	"github.com/russross/blackfriday/v2"
 	"github.com/spf13/afero"
 )
 
