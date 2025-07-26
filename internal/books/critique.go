@@ -69,7 +69,7 @@ func CritiqueFromString(s string) (*Critique, error) {
 	return c, nil
 }
 
-func (c Critique) String() string {
+func (c *Critique) String() string {
 	var sb strings.Builder
 	sb.WriteString("## Strengths\n")
 	sb.WriteString(c.Strengths)
@@ -82,18 +82,34 @@ func (c Critique) String() string {
 	return sb.String()
 }
 
-func (c Critique) GetStrengths() string {
+func (c *Critique) GetStrengths() string {
 	return c.Strengths
 }
 
-func (c Critique) GetImprovements() string {
+func (c *Critique) GetImprovements() string {
 	return c.Improvements
 }
 
-func (c Critique) GetImpressions() string {
+func (c *Critique) GetImpressions() string {
 	return c.Impressions
 }
 
-func (c Critique) GetScore() int {
+func (c *Critique) GetScore() int {
 	return c.Score
+}
+
+func (c *Critique) SetStrengths(strengths string) {
+	c.Strengths = strengths
+}
+
+func (c *Critique) SetImprovements(improvements string) {
+	c.Improvements = improvements
+}
+
+func (c *Critique) SetImpressions(impressions string) {
+	c.Impressions = impressions
+}
+
+func (c *Critique) SetScore(score int) {
+	c.Score = score
 }

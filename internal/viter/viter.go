@@ -23,6 +23,9 @@ type PromptProvider interface {
 	WriteNChapterPrompt(chapter int) string
 	CritiqueNChapterPrompt(chapter int) string
 	UpdateNChapterPrompt(chapter int) string
+	CritiqueBookPrompt() string
+	CritiqueBook2Prompt() string
+	CritiqueBookNPrompt(from, to int) string
 	CorrectTextPrompt() string
 }
 
@@ -224,6 +227,38 @@ func (v *Viter) UpdateAllChapters(iterCount int) bool {
 		if !v.UpdateChapter(i, iterCount) {
 			return false
 		}
+	}
+
+	return true
+}
+
+func (v *Viter) UpdateBook(iterCount int) bool {
+	if v.book == nil || v.book.GetPlan() == nil {
+		return false
+	}
+
+	if len(v.book.GetBookImprovements()) == 0 {
+		imps, ok := v.critiqueBook(v.book.GetChapters())
+		if !ok {
+			return false
+		}
+		v.book.SetBookImprovements(imps)
+	}
+
+	for range iterCount {
+		imps := v.book.GetBookImprovements()
+		chps, ok := v.updateBook(imps)
+		if !ok {
+			continue
+		}
+		imps, ok = v.critiqueBook(chps)
+		if !ok {
+			continue
+		}
+		for _, chp := range chps {
+			v.book.SetChapter(chp.GetNumber(), chp)
+		}
+		v.book.SetBookImprovements(imps)
 	}
 
 	return true
@@ -597,6 +632,84 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*bo
 	v.log.Infow("updated chapter", "n", chp.GetNumber())
 
 	return chp, true
+}
+
+func (v *Viter) critiqueBook(chps []*books.Chapter) (books.Plan, bool) {
+	v.log.Info("critiquing book")
+
+	hst := neural.NewHistory()
+	hst.AddText(v.pp.CritiqueBookPrompt())
+	hst.AddMessage()
+	for _, chp := range chps {
+		hst.AddText(chp.String())
+	}
+	hst.AddText(v.pp.CritiqueBook2Prompt())
+
+	review, ok := v.tg.GenerateText(hst.Messages())
+	if !ok {
+		return books.Plan{}, false
+	}
+
+	hst.AddMessage()
+	hst.AddText(review)
+
+	res := books.Plan{}
+
+	for i := 1; i <= len(chps); i += 5 {
+		from := i
+		to := min(from+4, len(chps))
+		v.log.Infow("critiquing chapters", "from", from, "to", to)
+
+		hst.AddMessage()
+		hst.AddText(v.pp.CritiqueBookNPrompt(from, to))
+
+		impData, ok := v.tg.GenerateText(hst.Messages())
+		if !ok {
+			continue
+		}
+
+		hst.AddMessage()
+		hst.AddText(impData)
+
+		imps, err := books.PlanFromString(impData)
+		if err != nil {
+			v.log.Warnw(err.Error())
+			continue
+		}
+
+		res = res.MergedCopy(imps)
+	}
+
+	v.log.Infow("critiqued book")
+
+	return res, true
+}
+
+func (v *Viter) updateBook(imps books.Plan) ([]*books.Chapter, bool) {
+	v.log.Infow("updating book", "chapters", imps.Count())
+
+	chps := make([]*books.Chapter, 0, imps.Count())
+
+	for i := 1; i <= imps.Count(); i++ {
+		imp := imps[i-1]
+		crit := &books.Critique{}
+		crit.SetImprovements(imp.GetContent())
+
+		prevChp, err := v.book.GetChapter(imp.GetNumber())
+		if err != nil {
+			v.log.Warnw(err.Error())
+			continue
+		}
+
+		chp, ok := v.updateChapter(prevChp, crit)
+		if !ok {
+			continue
+		}
+
+		chps = append(chps, chp)
+	}
+
+	return chps, true
 }
 
 func (v *Viter) correctChapterText(chp *books.Chapter, maxLen int) bool {

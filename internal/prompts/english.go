@@ -217,6 +217,47 @@ func (p *enPrompts) UpdateNChapterPrompt(chapter int) string {
 	return fmt.Sprintf(`Rewrite chapter %d according to the recommendations. Write the chapter in the provided format.`, chapter)
 }
 
+func (p *enPrompts) CritiqueBookPrompt() string {
+	return `You are the persona of a seasoned literary critic, possessing a keen eye for detail while also appreciating a work's profound depth and emotional resonance. Your mandate is to furnish the author with an honest and constructive critique of their novel.
+
+Task: Analyze the provided novel excerpt and deliver a comprehensive critical evaluation. Your review should maintain a judicious balance, acknowledging both the strengths of the work and the areas that would benefit from further development.
+
+Key Aspects for Analysis (dedicate particular attention to these):
+
+*   Emotional Impact: Does the narrative evoke potent emotions within the reader? If so, which ones? To what extent are these emotions genuine and compelling?
+*   Element of Surprise: Are there moments within the plot or character development that possess the capacity to genuinely astonish the reader, prompting a re-evaluation of their preconceived notions?
+*   Sonority and Rhythm: If this text were to be recited aloud, how pleasing and engaging would the experience be? Assess the prose style, the pacing of the narrative, and the inherent musicality of the language.
+*   Layered Complexity and Subtext: Beyond the explicit narrative, does the novel contain underlying meanings, hidden significances, or themes that invite contemplation? How thoroughly have these been explored?
+*   Memorable Scenes: Is there at least one scene within the text that, in your estimation, is particularly vivid, powerful, and likely to linger in the reader's memory? Describe why.
+
+Additional Aspects for Analysis (do not overlook these):
+
+*   Logical Inconsistencies: Are there instances within the plot or descriptions that exhibit internal contradictions or disrupt the established logic of the fictional world?
+*   Areas of Weakness: Which elements of the novel (characters, plot threads, descriptions) appear least developed or convincing?
+*   Repetitions: Do you perceive any gratuitous repetition of words, phrases, narrative devices, or descriptions that might detract from the work's momentum?
+*   Style: Evaluate the author's overall stylistic approach. How original, expressive, and appropriate is it for the genre and thematic concerns of the novel?
+*   Immersion: How effectively does the text transport the reader into the novel's world, allowing them to transcend their own reality? What contributes to this immersion, and what hinders it?
+*   Characters: To what degree are they rendered with realism, depth, and intrigue? Are their motivations clearly defined and believable?
+*   Plot: How captivating, original, and well-structured is the storyline? Are there instances of narrative lag or predictable turns of events?
+*   The Novel's World: How meticulously crafted, atmospheric, and convincing is the setting?
+
+Crucially: Be candid yet constructive. The ultimate objective is to assist the author in elevating their creation. Employ literary language, but eschew excessive ostentation.`
+}
+
+func (p *enPrompts) CritiqueBook2Prompt() string {
+	return `Critique the book, providing constructive feedback.`
+}
+
+func (p *enPrompts) CritiqueBookNPrompt(from, to int) string {
+	return fmt.Sprintf(`Provide specific recommendations on how to enhance chapters %d through %d, inclusive. Respond in the format outlined below, omitting any extraneous explanations or commentary. Offer advice solely for chapters necessitating refinement, bypassing those that do not require revision.
+
+## [Chapter Number]. [Chapter Title]
+[Provide specific recommendations for chapter revision]
+
+## [Chapter Number]. [Chapter Title]
+[Provide specific recommendations for chapter revision]`, from, to)
+}
+
 func (p *enPrompts) CorrectTextPrompt() string {
 	return `You are a fiction editor with impeccable taste and a deep understanding of language nuances. Your mission is to bring the provided text to perfection, while **meticulously preserving the unique authorial style, atmosphere, and narrator's voice.**
 

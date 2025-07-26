@@ -17,7 +17,7 @@ func main() {
 	var configPath string
 	var debug bool
 	var simple string
-	var create, meta, chapters, correctall bool
+	var create, meta, chapters, book, correctall bool
 	var md, html, epub, archive bool
 	var plan, chapter, iterCount, maxLen, correct int
 	var help bool
@@ -32,6 +32,7 @@ func main() {
 	flag.IntVar(&plan, "plan", 0, "Update book plan with given count of chapters")
 	flag.IntVar(&chapter, "chapter", 0, "Update chapter with given number")
 	flag.BoolVar(&chapters, "chapters", false, "Update all book chapters")
+	flag.BoolVar(&book, "book", false, "Update the whole book")
 	flag.BoolVar(&correctall, "correctall", false, "Correct all chapters")
 	flag.IntVar(&correct, "correct", 0, "Correct chapter with given number")
 	flag.IntVar(&iterCount, "iter", 5, "Update given number of times")
@@ -57,7 +58,7 @@ func main() {
 		}
 	}
 
-	if !create && !meta && !chapters && plan == 0 && chapter == 0 && correct == 0 && !md && !html && !epub {
+	if !create && !meta && !chapters && !book && plan == 0 && chapter == 0 && correct == 0 && !md && !html && !epub {
 		printHelp()
 		return
 	}
@@ -149,8 +150,22 @@ func main() {
 		}
 	}
 
+	if book {
+		ok = v.UpdateBook(iterCount)
+		if !ok {
+			return
+		}
+	}
+
 	if correct > 0 {
 		ok = v.CorrectChapter(correct, maxLen)
+		if !ok {
+			return
+		}
+	}
+
+	if correctall {
+		ok = v.CorrectAllChapters(maxLen)
 		if !ok {
 			return
 		}
@@ -203,6 +218,8 @@ func printHelp() {
 	fmt.Println("        Update chapter with given number")
 	fmt.Println("  -chapters")
 	fmt.Println("        Update all book chapters")
+	fmt.Println("  -book")
+	fmt.Println("        Update the whole book")
 	fmt.Println("  -correct int")
 	fmt.Println("        Correct chapter with given number")
 	fmt.Println("  -correctall")

@@ -27,6 +27,9 @@ type mockPromptProvider struct {
 	writeNChapterPrompt    string
 	critiqueNChapterPrompt string
 	updateNChapterPrompt   string
+	critiqueBookPrompt     string
+	critiqueBook2Prompt    string
+	critiqueBookNPrompt    string
 	correctTextPrompt      string
 }
 
@@ -76,6 +79,18 @@ func (m *mockPromptProvider) CritiqueNChapterPrompt(chapter int) string {
 
 func (m *mockPromptProvider) UpdateNChapterPrompt(chapter int) string {
 	return fmt.Sprintf(m.updateNChapterPrompt, chapter)
+}
+
+func (m *mockPromptProvider) CritiqueBookPrompt() string {
+	return m.critiqueBookPrompt
+}
+
+func (m *mockPromptProvider) CritiqueBook2Prompt() string {
+	return m.critiqueBook2Prompt
+}
+
+func (m *mockPromptProvider) CritiqueBookNPrompt(from, to int) string {
+	return fmt.Sprintf(m.critiqueBookNPrompt, from, to)
 }
 
 func (m *mockPromptProvider) CorrectTextPrompt() string {
@@ -139,6 +154,9 @@ func createTestPromptProvider() *mockPromptProvider {
 		writeNChapterPrompt:    "Write chapter %d prompt",
 		critiqueNChapterPrompt: "Critique chapter %d prompt",
 		updateNChapterPrompt:   "Update chapter %d prompt",
+		critiqueBookPrompt:     "Critique book prompt",
+		critiqueBook2Prompt:    "Critique book 2 prompt",
+		critiqueBookNPrompt:    "Critique book chapters %d to %d prompt",
 		correctTextPrompt:      "Correct text prompt",
 	}
 }
@@ -1241,4 +1259,285 @@ func TestViter_CorrectChapterText_SecondLoopBug(t *testing.T) {
 
 	// After fixing the bugs, this should now succeed
 	require.True(t, result, "Expected success after fixing second loop bugs")
+}
+
+// Helper function to create a valid book critique response that parses as a Plan
+func createValidBookCritiqueResponse() string {
+	return `## 1. Opening Chapter
+Need more dramatic hook
+
+## 2. Middle Chapter
+Character development could be stronger
+
+## 3. Ending Chapter
+Resolution feels rushed`
+}
+
+// Helper function to create a diff response for chapter updates
+func createValidChapterUpdateResponse(number int, title, content string) string {
+	return fmt.Sprintf(`## %d. %s
+%s`, number, title, content)
+}
+
+func TestViter_UpdateBook_NoBook(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	result := v.UpdateBook(1)
+
+	require.False(t, result)
+	require.Equal(t, 0, tg.callCount)
+}
+
+func TestViter_UpdateBook_NoPlan(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+
+	result := v.UpdateBook(1)
+
+	require.False(t, result) // Should fail because there's no plan
+}
+
+func TestViter_UpdateBook_Success_SingleIteration(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Chapter 1", "Content 1"),
+			createValidChapterResponse(2, "Chapter 2", "Content 2"),
+			createValidChapterResponse(3, "Chapter 3", "Content 3"),
+			createValidCritiqueResponse(8),
+			// Initial book critique
+			createValidBookCritiqueResponse(),
+			// Updated chapters responses
+			createValidChapterUpdateResponse(1, "Chapter 1", "Updated content 1"),
+			createValidChapterUpdateResponse(2, "Chapter 2", "Updated content 2"),
+			createValidChapterUpdateResponse(3, "Chapter 3", "Updated content 3"),
+			// Final book critique after update
+			createValidBookCritiqueResponse(),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	// Setup book with chapters
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 3))
+	// Don't need to update chapters - UpdateBook will do the updates
+
+	result := v.UpdateBook(1)
+
+	require.True(t, result)
+}
+
+func TestViter_UpdateBook_MultipleIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Chapter 1", "Content 1"),
+			createValidChapterResponse(2, "Chapter 2", "Content 2"),
+			createValidCritiqueResponse(8),
+		},
+		infiniteMode:    true,
+		defaultResponse: createValidBookCritiqueResponse(),
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	// Setup book with chapters
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 2))
+
+	result := v.UpdateBook(3)
+
+	require.True(t, result)
+}
+
+func TestViter_UpdateBook_ZeroIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Chapter 1", "Content 1"),
+			createValidCritiqueResponse(8),
+			createValidBookCritiqueResponse(),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	// Setup book with chapters
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+
+	result := v.UpdateBook(0)
+
+	require.True(t, result)
+}
+
+func TestViter_UpdateBook_NegativeIterations(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Chapter 1", "Content 1"),
+			createValidCritiqueResponse(8),
+			createValidBookCritiqueResponse(),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	// Setup book with chapters
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+
+	result := v.UpdateBook(-1)
+
+	require.True(t, result)
+}
+
+func TestViter_UpdateBook_InitialCritiqueFailure(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+		},
+		shouldFail: true, // This will cause the initial book critique to fail
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	// Setup book with plan
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+
+	// Allow setup to succeed by temporarily disabling failure
+	tg.shouldFail = false
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+
+	// Re-enable failure for UpdateBook call
+	tg.shouldFail = true
+
+	result := v.UpdateBook(1)
+
+	require.False(t, result)
+}
+
+func TestViter_UpdateBook_WithExistingCritique(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Chapter 1", "Content 1"),
+			createValidCritiqueResponse(8),
+			// First book critique to set existing critique
+			createValidBookCritiqueResponse(),
+			// Chapter update response
+			createValidChapterUpdateResponse(1, "Chapter 1", "Updated content 1"),
+			// Final critique after update
+			createValidBookCritiqueResponse(),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	// Setup book with chapters and run initial UpdateBook to set critique
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 1))
+	require.True(t, v.UpdateBook(0)) // This sets the initial critique
+
+	result := v.UpdateBook(1)
+
+	require.True(t, result)
+}
+
+func TestViter_UpdateBook_PartialFailures_MixedSuccess(t *testing.T) {
+	cfg := createTestConfig()
+	pp := createTestPromptProvider()
+
+	// Create responses for 3 chapters, but make chapter 2 update fail
+	tg := &mockTextGenerator{
+		responses: []string{
+			createValidMetaResponse(),
+			createValidCritiqueResponse(8),
+			createValidPlanResponse(),
+			createValidCritiqueResponse(7),
+			createValidChapterResponse(1, "Chapter 1", "Content 1"),
+			createValidChapterResponse(2, "Chapter 2", "Content 2"),
+			createValidChapterResponse(3, "Chapter 3", "Content 3"),
+			createValidCritiqueResponse(8),
+			createValidBookCritiqueResponse(),
+			// Chapter updates - chapter 1 succeeds
+			createValidChapterUpdateResponse(1, "Chapter 1", "Updated content 1"),
+			// Chapter 2 will fail (simulate by making this call fail)
+			"", // This will cause failure
+			// Chapter 3 succeeds
+			createValidChapterUpdateResponse(3, "Chapter 3", "Updated content 3"),
+			// Final critique
+			createValidBookCritiqueResponse(),
+		},
+	}
+	v, _ := viter.NewViter(cfg, pp, tg)
+
+	// Setup book with 3 chapters
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+	require.True(t, v.CreateBook(fs, path))
+	require.True(t, v.UpdateMeta(1))
+	require.True(t, v.UpdatePlan(1, 3))
+
+	result := v.UpdateBook(1)
+
+	require.True(t, result)
 }
