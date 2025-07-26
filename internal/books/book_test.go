@@ -928,3 +928,262 @@ func TestGetChapterMixedSetAndUnset(t *testing.T) {
 	require.Equal(t, "This is the second chapter", retrievedChapter2.GetContent())
 	require.Equal(t, 2, retrievedChapter2.GetNumber())
 }
+
+func TestSetBookCritique(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := books.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Create a book critique (which is a Plan - slice of chapters)
+	critique1 := books.NewChapter(1, "Plot Structure Issues", "The overall plot structure needs improvement in pacing and character development.")
+	critique2 := books.NewChapter(2, "Character Development", "Main characters lack depth and consistent motivation throughout the story.")
+	bookCritique := books.Plan{critique1, critique2}
+
+	// Set the book critique
+	err = book.SetBookImprovements(bookCritique)
+	require.NoError(t, err)
+
+	// Verify it was set
+	retrievedCritique := book.GetBookImprovements()
+	require.Equal(t, bookCritique, retrievedCritique)
+	require.Equal(t, 2, retrievedCritique.Count())
+
+	// Verify first critique chapter
+	require.Equal(t, "Plot Structure Issues", retrievedCritique[0].GetTitle())
+	require.Equal(t, "The overall plot structure needs improvement in pacing and character development.", retrievedCritique[0].GetContent())
+	require.Equal(t, 1, retrievedCritique[0].GetNumber())
+
+	// Verify second critique chapter
+	require.Equal(t, "Character Development", retrievedCritique[1].GetTitle())
+	require.Equal(t, "Main characters lack depth and consistent motivation throughout the story.", retrievedCritique[1].GetContent())
+	require.Equal(t, 2, retrievedCritique[1].GetNumber())
+
+	// Verify file was created
+	critiqueExists, err := afero.Exists(fs, filepath.Join(path, "book_critique.md"))
+	require.NoError(t, err)
+	require.True(t, critiqueExists)
+}
+
+func TestGetBookCritiqueEmpty(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := books.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Get book critique when none is set
+	critique := book.GetBookImprovements()
+	require.Equal(t, 0, critique.Count())
+}
+
+func TestBookCritiquePersistence(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	// Create book and set critique
+	book, err := books.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan first since book critique loading depends on having a plan
+	planChapter1 := books.NewChapter(1, "Chapter One", "Content of chapter one")
+	planChapter2 := books.NewChapter(2, "Chapter Two", "Content of chapter two")
+	plan := books.Plan{planChapter1, planChapter2}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	originalCritique1 := books.NewChapter(1, "Dialogue Issues", "The dialogue feels unnatural and doesn't reflect character personalities.")
+	originalCritique2 := books.NewChapter(2, "Setting Description", "More vivid descriptions of the setting would help immerse readers.")
+	originalBookCritique := books.Plan{originalCritique1, originalCritique2}
+
+	err = book.SetBookImprovements(originalBookCritique)
+	require.NoError(t, err)
+
+	// Load book from filesystem
+	loadedBook, err := books.LoadBook(fs, path)
+	require.NoError(t, err)
+
+	// Verify critique persisted
+	loadedCritique := loadedBook.GetBookImprovements()
+	require.Equal(t, 2, loadedCritique.Count())
+
+	require.Equal(t, "Dialogue Issues", loadedCritique[0].GetTitle())
+	require.Equal(t, "The dialogue feels unnatural and doesn't reflect character personalities.", loadedCritique[0].GetContent())
+	require.Equal(t, "Setting Description", loadedCritique[1].GetTitle())
+	require.Equal(t, "More vivid descriptions of the setting would help immerse readers.", loadedCritique[1].GetContent())
+}
+
+func TestBookCritiqueUpdate(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := books.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan first since book critique loading depends on having a plan
+	planChapter := books.NewChapter(1, "Chapter One", "Content of chapter one")
+	plan := books.Plan{planChapter}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Set initial critique
+	initialCritique := books.NewChapter(1, "Initial Issue", "This is the initial critique.")
+	err = book.SetBookImprovements(books.Plan{initialCritique})
+	require.NoError(t, err)
+
+	// Update with new critique
+	updatedCritique1 := books.NewChapter(1, "Updated Issue", "This is the updated critique for the same chapter.")
+	updatedCritique2 := books.NewChapter(2, "New Issue", "This is a new critique chapter.")
+	updatedBookCritique := books.Plan{updatedCritique1, updatedCritique2}
+
+	err = book.SetBookImprovements(updatedBookCritique)
+	require.NoError(t, err)
+
+	// Verify update took effect
+	retrievedCritique := book.GetBookImprovements()
+	require.Equal(t, 2, retrievedCritique.Count())
+	require.Equal(t, "Updated Issue", retrievedCritique[0].GetTitle())
+	require.Equal(t, "This is the updated critique for the same chapter.", retrievedCritique[0].GetContent())
+	require.Equal(t, "New Issue", retrievedCritique[1].GetTitle())
+	require.Equal(t, "This is a new critique chapter.", retrievedCritique[1].GetContent())
+}
+
+func TestBookCritiqueWithEmptyPlan(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := books.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set empty book critique
+	emptyPlan := books.Plan{}
+	err = book.SetBookImprovements(emptyPlan)
+	require.NoError(t, err)
+
+	// Verify empty critique
+	retrievedCritique := book.GetBookImprovements()
+	require.Equal(t, 0, retrievedCritique.Count())
+}
+
+func TestBookCritiqueSaveArchiving(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := books.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan first since book critique loading depends on having a plan
+	planChapter := books.NewChapter(1, "Chapter One", "Content of chapter one")
+	plan := books.Plan{planChapter}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Enable archiving
+	book.EnableArchiving()
+
+	// Set initial critique
+	initialCritique := books.NewChapter(1, "First Version", "This is the first version of the critique.")
+	err = book.SetBookImprovements(books.Plan{initialCritique})
+	require.NoError(t, err)
+
+	// Set updated critique (should archive the previous version)
+	updatedCritique := books.NewChapter(1, "Second Version", "This is the second version of the critique.")
+	err = book.SetBookImprovements(books.Plan{updatedCritique})
+	require.NoError(t, err)
+
+	// Verify current critique
+	retrievedCritique := book.GetBookImprovements()
+	require.Equal(t, "Second Version", retrievedCritique[0].GetTitle())
+	require.Equal(t, "This is the second version of the critique.", retrievedCritique[0].GetContent())
+
+	// Verify archived directory exists
+	archivedExists, err := afero.Exists(fs, filepath.Join(path, "archived"))
+	require.NoError(t, err)
+	require.True(t, archivedExists)
+}
+
+func TestBookCritiqueIntegrationWithOtherCritiques(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	path := "/test/book"
+
+	book, err := books.CreateBook(fs, path)
+	require.NoError(t, err)
+
+	// Set up a plan so we can test chapter critiques too
+	chapter1 := books.NewChapter(1, "Chapter One", "Content of chapter one")
+	chapter2 := books.NewChapter(2, "Chapter Two", "Content of chapter two")
+	plan := books.Plan{chapter1, chapter2}
+	err = book.SetPlan(plan)
+	require.NoError(t, err)
+
+	// Set various critiques
+	metaCrit := &books.Critique{
+		Strengths:    "Good concept",
+		Improvements: "More detail needed",
+		Impressions:  "The basic idea is solid.",
+		Score:        7,
+	}
+	err = book.SetMetaCrit(metaCrit)
+	require.NoError(t, err)
+
+	planCrit := &books.Critique{
+		Strengths:    "Clear structure",
+		Improvements: "Better chapter transitions",
+		Impressions:  "The overall structure works well.",
+		Score:        6,
+	}
+	err = book.SetPlanCrit(planCrit)
+	require.NoError(t, err)
+
+	bookCritiqueChapter := books.NewChapter(1, "Overall Assessment", "The book shows promise but needs refinement in several areas.")
+	bookCritique := books.Plan{bookCritiqueChapter}
+	err = book.SetBookImprovements(bookCritique)
+	require.NoError(t, err)
+
+	chapterCrit := &books.Critique{
+		Strengths:    "Good opening",
+		Improvements: "Needs more action",
+		Impressions:  "This chapter sets the stage well.",
+		Score:        5,
+	}
+	err = book.SetChapterCritique(1, chapterCrit)
+	require.NoError(t, err)
+
+	// Save and reload to test persistence
+	err = book.Save()
+	require.NoError(t, err)
+
+	loadedBook, err := books.LoadBook(fs, path)
+	require.NoError(t, err)
+
+	// Verify all critiques are present
+	require.Equal(t, metaCrit, loadedBook.GetMetaCrit())
+	require.Equal(t, planCrit, loadedBook.GetPlanCrit())
+
+	loadedBookCritique := loadedBook.GetBookImprovements()
+	require.Equal(t, 1, loadedBookCritique.Count())
+	require.Equal(t, "Overall Assessment", loadedBookCritique[0].GetTitle())
+	require.Equal(t, "The book shows promise but needs refinement in several areas.", loadedBookCritique[0].GetContent())
+
+	loadedChapterCrit, err := loadedBook.GetChapterCritique(1)
+	require.NoError(t, err)
+	require.Equal(t, chapterCrit, loadedChapterCrit)
+
+	// Verify all critique files exist
+	metaCritExists, err := afero.Exists(fs, filepath.Join(path, "meta_critique.md"))
+	require.NoError(t, err)
+	require.True(t, metaCritExists)
+
+	planCritExists, err := afero.Exists(fs, filepath.Join(path, "plan_critique.md"))
+	require.NoError(t, err)
+	require.True(t, planCritExists)
+
+	bookCritExists, err := afero.Exists(fs, filepath.Join(path, "book_critique.md"))
+	require.NoError(t, err)
+	require.True(t, bookCritExists)
+
+	chapterCritExists, err := afero.Exists(fs, filepath.Join(path, "chapter_1_critique.md"))
+	require.NoError(t, err)
+	require.True(t, chapterCritExists)
+}

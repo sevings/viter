@@ -34,6 +34,7 @@ type Book struct {
 
 	metaCrit *Critique
 	planCrit *Critique
+	bookImps Plan
 	chpsCrit []*Critique
 
 	arch bool
@@ -102,6 +103,16 @@ func LoadBook(fs afero.Fs, path string) (*Book, error) {
 
 	if b.plan.Count() == 0 {
 		return b, nil
+	}
+
+	if content, err := b.readFile("book_critique.md"); err != nil && err != ErrFileNotFound {
+		return nil, err
+	} else if err == nil {
+		imps, err := PlanFromString(string(content))
+		if err != nil {
+			return nil, err
+		}
+		b.bookImps = imps
 	}
 
 	b.chps = make([]*Chapter, b.plan.Count())
@@ -178,6 +189,12 @@ func (b *Book) Save() error {
 		}
 	}
 
+	if b.bookImps != nil {
+		if err := b.saveBookImps(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -195,6 +212,10 @@ func (b *Book) saveMetaCrit() error {
 
 func (b *Book) savePlanCrit() error {
 	return b.writeFile("plan_critique.md", []byte(b.planCrit.String()))
+}
+
+func (b *Book) saveBookImps() error {
+	return b.writeFile("book_critique.md", []byte(b.bookImps.String()))
 }
 
 func (b *Book) writeFile(name string, content []byte) error {
@@ -251,6 +272,10 @@ func (b *Book) GetPlanChapter(i int) (*Chapter, error) {
 		return &Chapter{}, ErrInvalidChapterIndex
 	}
 	return b.plan[i-1], nil
+}
+
+func (b *Book) GetChapters() []*Chapter {
+	return b.chps
 }
 
 func (b *Book) GetChapter(i int) (*Chapter, error) {
@@ -329,6 +354,16 @@ func (b *Book) SetPlanCrit(planCrit *Critique) error {
 
 func (b *Book) GetPlanCrit() *Critique {
 	return b.planCrit
+}
+
+// SetBookCrit sets the book's book critique and saves it to the filesystem.
+func (b *Book) SetBookImprovements(bookCrit Plan) error {
+	b.bookImps = bookCrit
+	return b.saveBookImps()
+}
+
+func (b *Book) GetBookImprovements() Plan {
+	return b.bookImps
 }
 
 func (b *Book) Markdown() (string, error) {
