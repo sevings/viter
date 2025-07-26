@@ -46,7 +46,8 @@ func DiffFromString(text string) (*Diff, error) {
 	parts := make(map[int]string)
 
 	// Use regex to find all <n>content</n> patterns
-	re := regexp.MustCompile(`<(\d+)>(.*?)</\d+>`)
+	// (?s) flag makes . match newlines
+	re := regexp.MustCompile(`(?s)<(\d+)>(.*?)</\d+>`)
 	matches := re.FindAllStringSubmatch(text, -1)
 
 	for _, match := range matches {

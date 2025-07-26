@@ -119,6 +119,11 @@ func TestDiffFromString(t *testing.T) {
 			input:    "<1>first</1>\n<3>third</3>",
 			expected: "first\n\nthird",
 		},
+		{
+			name:     "newlines inside tags",
+			input:    "<1>line1\nline2</1>\n<2>line3</2>",
+			expected: "line1\nline2\nline3",
+		},
 	}
 
 	for _, tt := range tests {
