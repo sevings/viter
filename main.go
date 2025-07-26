@@ -53,6 +53,7 @@ func main() {
 		create = true
 		meta = true
 		chapters = true
+		book = true
 		if plan == 0 {
 			plan = 10
 		}
