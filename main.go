@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"strings"
 
 	"viter/internal/neural"
 	"viter/internal/prompts"
@@ -11,6 +13,36 @@ import (
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
 )
+
+func NewPrompts(lang string) viter.PromptProvider {
+	// If lang is empty, detect OS locale
+	if lang == "" {
+		if locale := os.Getenv("LC_ALL"); locale != "" {
+			lang = strings.SplitN(locale, ".", 2)[0]
+		} else if locale := os.Getenv("LC_MESSAGES"); locale != "" {
+			lang = strings.SplitN(locale, ".", 2)[0]
+		} else if locale := os.Getenv("LANG"); locale != "" {
+			lang = strings.SplitN(locale, ".", 2)[0]
+		} else {
+			lang = "en" // fallback to English
+		}
+
+		// Extract language code (first part before underscore)
+		if strings.Contains(lang, "_") {
+			lang = strings.SplitN(lang, "_", 2)[0]
+		}
+	}
+
+	var pp viter.PromptProvider
+	switch lang {
+	case "ru":
+		pp = prompts.NewRuPrompts()
+	default:
+		pp = prompts.NewEnPrompts()
+	}
+
+	return pp
+}
 
 func main() {
 	var path, lang string
@@ -23,7 +55,7 @@ func main() {
 	var help bool
 
 	flag.StringVar(&path, "path", ".", "Path to the book directory")
-	flag.StringVar(&lang, "lang", "en", "Language of the book")
+	flag.StringVar(&lang, "lang", "", "Language of the book")
 	flag.StringVar(&configPath, "config", "viter.toml", "Path to the configuration file")
 	flag.BoolVar(&debug, "debug", false, "Enable debug mode")
 	flag.StringVar(&simple, "simple", "", "Generate the whole book using the given prompt")
@@ -95,14 +127,7 @@ func main() {
 		tg.EnableResponseLogging(fs, path)
 	}
 
-	var pp viter.PromptProvider
-	switch lang {
-	case "ru":
-		pp = prompts.NewRuPrompts()
-	default:
-		pp = prompts.NewEnPrompts()
-	}
-
+	pp := NewPrompts(lang)
 	v, ok := viter.NewViter(cfg, pp, tg)
 	if !ok {
 		return
@@ -206,7 +231,7 @@ func printHelp() {
 	fmt.Println("  -path string")
 	fmt.Println("        Path to the book directory (default \".\")")
 	fmt.Println("  -lang string")
-	fmt.Println("        Language of the book (default \"en\")")
+	fmt.Println("        Language of the book (defaults to OS language)")
 	fmt.Println("  -simple string")
 	fmt.Println("        Generate the whole book using the given prompt")
 	fmt.Println("  -create")
