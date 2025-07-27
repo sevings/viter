@@ -655,9 +655,9 @@ func (v *Viter) critiqueBook(chps []*books.Chapter) (books.Plan, bool) {
 
 	res := books.Plan{}
 
-	for i := 1; i <= len(chps); i += 5 {
+	for i := 1; i <= v.book.GetPlan().Count(); i += 5 {
 		from := i
-		to := min(from+4, len(chps))
+		to := min(from+4, v.book.GetPlan().Count())
 		v.log.Infow("critiquing chapters", "from", from, "to", to)
 
 		hst.AddMessage()
