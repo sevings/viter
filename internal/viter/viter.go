@@ -591,7 +591,7 @@ func (v *Viter) critiqueChapter(chapter *books.Chapter) (*books.Critique, bool) 
 func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*books.Chapter, bool) {
 	v.log.Infow("updating chapter", "n", prevChp.GetNumber())
 
-	prevDiff := books.DiffFromText(prevChp.String())
+	prevDiff := books.DiffFromText(prevChp.GetContent())
 
 	hst := neural.NewHistory()
 	hst.AddText(v.pp.UpdateChapterPrompt())
@@ -606,7 +606,7 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*bo
 		}
 		hst.AddText(chp.String())
 	}
-	hst.AddText(prevDiff.String())
+	hst.AddText(prevChp.GetTitle() + "\n" + prevDiff.String())
 	hst.AddText(v.pp.UpdateNChapterPrompt(prevChp.GetNumber()))
 	hst.AddText(crit.GetImprovements())
 
@@ -622,12 +622,7 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*bo
 	}
 	prevDiff.Merge(diff)
 
-	chp, err := books.ChapterFromString(prevDiff.Text())
-	if err != nil {
-		v.log.Warnw(err.Error())
-		return nil, false
-	}
-	chp.SetNumber(prevChp.GetNumber())
+	chp := books.NewChapter(prevChp.GetNumber(), prevChp.GetTitle(), prevDiff.Text())
 
 	v.log.Infow("updated chapter", "n", chp.GetNumber())
 
