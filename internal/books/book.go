@@ -22,7 +22,8 @@ var (
 )
 
 func trimTitle(s string) string {
-	return strings.Trim(s, "#*\"«» \n\r\t")
+	s = strings.SplitN(s, "\n", 2)[0]
+	return strings.Trim(s, "#*\"«». \n\r\t")
 }
 
 type Book struct {
