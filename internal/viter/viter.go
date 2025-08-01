@@ -29,6 +29,8 @@ type PromptProvider interface {
 	CorrectTextPrompt() string
 }
 
+const maxTries = 3
+
 type TextGenerator interface {
 	GenerateText(messages []llms.MessageContent) (string, bool)
 }
@@ -99,7 +101,7 @@ func (v *Viter) UpdateMeta(iterCount int) bool {
 
 	i := 0
 	if !v.book.GetMeta().IsFilled() {
-		meta, ok := v.writeMeta(v.book.GetMeta())
+		meta, ok := v.writeMeta(v.book.GetMeta(), 1)
 		if !ok {
 			return false
 		}
@@ -108,7 +110,7 @@ func (v *Viter) UpdateMeta(iterCount int) bool {
 	}
 
 	if v.book.GetMetaCrit() == nil || v.book.GetMetaCrit().GetImprovements() == "" {
-		crit, ok := v.critiqueMeta(v.book.GetMeta())
+		crit, ok := v.critiqueMeta(v.book.GetMeta(), 1)
 		if !ok {
 			return false
 		}
@@ -116,12 +118,12 @@ func (v *Viter) UpdateMeta(iterCount int) bool {
 	}
 
 	for ; i < iterCount; i++ {
-		meta, ok := v.updateMeta(v.book.GetMeta(), v.book.GetMetaCrit())
+		meta, ok := v.updateMeta(v.book.GetMeta(), v.book.GetMetaCrit(), 1)
 		if !ok {
 			continue
 		}
 		meta = v.book.GetMeta().MergedCopy(meta)
-		crit, ok := v.critiqueMeta(meta)
+		crit, ok := v.critiqueMeta(meta, 1)
 		if !ok {
 			continue
 		}
@@ -139,7 +141,7 @@ func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
 
 	i := 0
 	if len(v.book.GetPlan()) != chapterCount {
-		plan, ok := v.writePlan(v.book.GetPlan(), chapterCount)
+		plan, ok := v.writePlan(v.book.GetPlan(), chapterCount, 1)
 		if !ok {
 			return false
 		}
@@ -148,7 +150,7 @@ func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
 	}
 
 	if v.book.GetPlanCrit() == nil || v.book.GetPlanCrit().GetImprovements() == "" {
-		crit, ok := v.critiquePlan(v.book.GetPlan())
+		crit, ok := v.critiquePlan(v.book.GetPlan(), 1)
 		if !ok {
 			return false
 		}
@@ -156,12 +158,12 @@ func (v *Viter) UpdatePlan(chapterCount, iterCount int) bool {
 	}
 
 	for ; i < iterCount; i++ {
-		plan, ok := v.updatePlan(v.book.GetPlan(), v.book.GetPlanCrit())
+		plan, ok := v.updatePlan(v.book.GetPlan(), v.book.GetPlanCrit(), 1)
 		if !ok {
 			continue
 		}
 		plan = v.book.GetPlan().MergedCopy(plan)
-		crit, ok := v.critiquePlan(plan)
+		crit, ok := v.critiquePlan(plan, 1)
 		if !ok {
 			continue
 		}
@@ -181,7 +183,7 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 	if chp, err := v.book.GetChapter(nChapter); err != nil {
 		return false
 	} else if chp == nil || chp.GetContent() == "" {
-		newChp, ok := v.writeChapter(nChapter)
+		newChp, ok := v.writeChapter(nChapter, 1)
 		if !ok {
 			return false
 		}
@@ -193,7 +195,7 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 		return false
 	} else if crit == nil || crit.GetImprovements() == "" {
 		chp, _ := v.book.GetChapter(nChapter)
-		crit, ok := v.critiqueChapter(chp)
+		crit, ok := v.critiqueChapter(chp, 1)
 		if !ok {
 			return false
 		}
@@ -203,11 +205,11 @@ func (v *Viter) UpdateChapter(nChapter, iterCount int) bool {
 	for ; i < iterCount; i++ {
 		chp, _ := v.book.GetChapter(nChapter)
 		crit, _ := v.book.GetChapterCritique(nChapter)
-		chapter, ok := v.updateChapter(chp, crit)
+		chapter, ok := v.updateChapter(chp, crit, 1)
 		if !ok {
 			continue
 		}
-		crit, ok = v.critiqueChapter(chapter)
+		crit, ok = v.critiqueChapter(chapter, 1)
 		if !ok {
 			continue
 		}
@@ -346,7 +348,11 @@ func (v *Viter) ExportEPUB() bool {
 	return true
 }
 
-func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
+func (v *Viter) writeMeta(prevMeta *books.BookMeta, nTry int) (*books.BookMeta, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("writing meta")
 
 	hst := neural.NewHistory()
@@ -362,7 +368,7 @@ func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
 	meta, err := books.MetaFromString(metaData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.writeMeta(prevMeta, nTry+1)
 	}
 
 	v.log.Infow("wrote meta")
@@ -370,7 +376,11 @@ func (v *Viter) writeMeta(prevMeta *books.BookMeta) (*books.BookMeta, bool) {
 	return meta, true
 }
 
-func (v *Viter) critiqueMeta(meta *books.BookMeta) (*books.Critique, bool) {
+func (v *Viter) critiqueMeta(meta *books.BookMeta, nTry int) (*books.Critique, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("critiquing meta")
 
 	hst := neural.NewHistory()
@@ -386,11 +396,11 @@ func (v *Viter) critiqueMeta(meta *books.BookMeta) (*books.Critique, bool) {
 	crit, err := books.CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.critiqueMeta(meta, nTry+1)
 	}
 	if crit.GetImprovements() == "" {
 		v.log.Warnw("no improvements found")
-		return nil, false
+		return v.critiqueMeta(meta, nTry+1)
 	}
 
 	v.log.Infow("critiqued meta", "score", crit.GetScore())
@@ -398,7 +408,11 @@ func (v *Viter) critiqueMeta(meta *books.BookMeta) (*books.Critique, bool) {
 	return crit, true
 }
 
-func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique) (*books.BookMeta, bool) {
+func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique, nTry int) (*books.BookMeta, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("updating meta")
 
 	hst := neural.NewHistory()
@@ -416,7 +430,7 @@ func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique) (*boo
 	meta, err := books.MetaFromString(metaData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.updateMeta(prevMeta, crit, nTry+1)
 	}
 
 	v.log.Infow("updated meta")
@@ -424,7 +438,11 @@ func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique) (*boo
 	return meta, true
 }
 
-func (v *Viter) writePlan(prevPlan books.Plan, chapterCount int) (books.Plan, bool) {
+func (v *Viter) writePlan(prevPlan books.Plan, chapterCount, nTry int) (books.Plan, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("writing plan", "chapters", chapterCount)
 
 	hst := neural.NewHistory()
@@ -443,7 +461,7 @@ func (v *Viter) writePlan(prevPlan books.Plan, chapterCount int) (books.Plan, bo
 	plan, err := books.PlanFromString(planData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.writePlan(prevPlan, chapterCount, nTry+1)
 	}
 
 	v.log.Infow("wrote plan", "chapters", len(plan))
@@ -451,7 +469,11 @@ func (v *Viter) writePlan(prevPlan books.Plan, chapterCount int) (books.Plan, bo
 	return plan, true
 }
 
-func (v *Viter) critiquePlan(plan books.Plan) (*books.Critique, bool) {
+func (v *Viter) critiquePlan(plan books.Plan, nTry int) (*books.Critique, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("critiquing plan")
 
 	hst := neural.NewHistory()
@@ -468,11 +490,11 @@ func (v *Viter) critiquePlan(plan books.Plan) (*books.Critique, bool) {
 	crit, err := books.CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.critiquePlan(plan, nTry+1)
 	}
 	if crit.GetImprovements() == "" {
 		v.log.Warnw("no improvements found")
-		return nil, false
+		return v.critiquePlan(plan, nTry+1)
 	}
 
 	v.log.Infow("critiqued plan", "score", crit.GetScore())
@@ -480,7 +502,11 @@ func (v *Viter) critiquePlan(plan books.Plan) (*books.Critique, bool) {
 	return crit, true
 }
 
-func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique) (books.Plan, bool) {
+func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique, nTry int) (books.Plan, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("updating plan")
 
 	hst := neural.NewHistory()
@@ -499,7 +525,7 @@ func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique) (books.Pla
 	plan, err := books.PlanFromString(planData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.updatePlan(prevPlan, crit, nTry+1)
 	}
 
 	v.log.Infow("updated plan", "chapters", len(plan))
@@ -507,7 +533,11 @@ func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique) (books.Pla
 	return plan, true
 }
 
-func (v *Viter) writeChapter(n int) (*books.Chapter, bool) {
+func (v *Viter) writeChapter(n, nTry int) (*books.Chapter, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("writing chapter")
 
 	hst := neural.NewHistory()
@@ -540,7 +570,7 @@ func (v *Viter) writeChapter(n int) (*books.Chapter, bool) {
 	chapter, err := books.ChapterFromString(chapterData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.writeChapter(n, nTry+1)
 	}
 	chapter.SetNumber(n)
 
@@ -549,7 +579,11 @@ func (v *Viter) writeChapter(n int) (*books.Chapter, bool) {
 	return chapter, true
 }
 
-func (v *Viter) critiqueChapter(chapter *books.Chapter) (*books.Critique, bool) {
+func (v *Viter) critiqueChapter(chapter *books.Chapter, nTry int) (*books.Critique, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("critiquing chapter")
 
 	hst := neural.NewHistory()
@@ -576,11 +610,11 @@ func (v *Viter) critiqueChapter(chapter *books.Chapter) (*books.Critique, bool) 
 	crit, err := books.CritiqueFromString(critData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.critiqueChapter(chapter, nTry+1)
 	}
 	if crit.GetImprovements() == "" {
 		v.log.Warnw("no improvements found")
-		return nil, false
+		return v.critiqueChapter(chapter, nTry+1)
 	}
 
 	v.log.Infow("critiqued chapter", "n", chapter.GetNumber(), "score", crit.GetScore())
@@ -588,7 +622,11 @@ func (v *Viter) critiqueChapter(chapter *books.Chapter) (*books.Critique, bool) 
 	return crit, true
 }
 
-func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*books.Chapter, bool) {
+func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique, nTry int) (*books.Chapter, bool) {
+	if nTry > maxTries {
+		return nil, false
+	}
+
 	v.log.Infow("updating chapter", "n", prevChp.GetNumber())
 
 	prevDiff := books.DiffFromText(prevChp.GetContent())
@@ -618,7 +656,7 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique) (*bo
 	diff, err := books.DiffFromString(diffData)
 	if err != nil {
 		v.log.Warnw(err.Error())
-		return nil, false
+		return v.updateChapter(prevChp, crit, nTry+1)
 	}
 	prevDiff.Merge(diff)
 
@@ -658,17 +696,24 @@ func (v *Viter) critiqueBook(chps []*books.Chapter) (books.Plan, bool) {
 		hst.AddMessage()
 		hst.AddText(v.pp.CritiqueBookNPrompt(from, to))
 
-		impData, ok := v.tg.GenerateText(hst.Messages())
-		if !ok {
-			continue
-		}
+		var imps books.Plan
+		var err error
+		for range maxTries {
+			impData, ok := v.tg.GenerateText(hst.Messages())
+			if !ok {
+				continue
+			}
 
-		hst.AddMessage()
-		hst.AddText(impData)
+			hst.AddMessage()
+			hst.AddText(impData)
 
-		imps, err := books.PlanFromString(impData)
-		if err != nil {
+			imps, err = books.PlanFromString(impData)
+			if err == nil {
+				break
+			}
 			v.log.Warnw(err.Error())
+		}
+		if err != nil {
 			continue
 		}
 
@@ -696,7 +741,7 @@ func (v *Viter) updateBook(imps books.Plan) ([]*books.Chapter, bool) {
 			continue
 		}
 
-		chp, ok := v.updateChapter(prevChp, crit)
+		chp, ok := v.updateChapter(prevChp, crit, 1)
 		if !ok {
 			continue
 		}
