@@ -1,6 +1,10 @@
 package neural
 
-import "github.com/tmc/langchaingo/llms"
+import (
+	"strings"
+
+	"github.com/tmc/langchaingo/llms"
+)
 
 type History []llms.MessageContent
 
@@ -27,5 +31,18 @@ func (h *History) AddText(text string) {
 }
 
 func (h *History) Messages() []llms.MessageContent {
+	for i := range *h {
+		if len((*h)[i].Parts) == 1 {
+			continue
+		}
+
+		parts := make([]string, len((*h)[i].Parts))
+		for j, part := range (*h)[i].Parts {
+			parts[j] = part.(llms.TextContent).String()
+		}
+		text := strings.Join(parts, "\n\n\n\n")
+		(*h)[i].Parts = []llms.ContentPart{llms.TextPart(text)}
+	}
+
 	return *h
 }
