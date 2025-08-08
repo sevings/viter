@@ -98,7 +98,7 @@ func (llm *LLM) GenerateText(messages []llms.MessageContent) (string, bool) {
 
 	llm.logResponse(resp)
 
-	if resp[:7] == "<think>" {
+	if len(resp) > 7 && resp[:7] == "<think>" {
 		i := strings.Index(resp, "</think>")
 		if i > 0 {
 			resp = resp[i+8:]
@@ -116,7 +116,12 @@ func (llm *LLM) generate(messages []llms.MessageContent, nTry int) (string, bool
 
 	resp, err := llm.llm.GenerateContent(context.Background(), messages, llm.opts...)
 	if err == nil {
-		return resp.Choices[0].Content, true
+		text := resp.Choices[0].Content
+		if text == "" {
+			return llm.generate(messages, nTry+1)
+		}
+
+		return text, true
 	}
 
 	if strings.Contains(err.Error(), "Service Unavailable") || strings.Contains(err.Error(), "Error 50") {
