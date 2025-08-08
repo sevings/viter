@@ -91,7 +91,7 @@ func main() {
 		}
 	}
 
-	if !create && !meta && !chapters && !book && plan == 0 && chapter == 0 && correct == 0 && !md && !html && !epub {
+	if !create && !meta && !chapters && !book && !correctall && plan == 0 && chapter == 0 && correct == 0 && !md && !html && !epub {
 		printHelp()
 		return
 	}
