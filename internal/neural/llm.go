@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/afero"
 	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/googleai"
 	"github.com/tmc/langchaingo/llms/mistral"
 	"github.com/tmc/langchaingo/llms/openai"
@@ -68,6 +69,15 @@ func NewLLM(cfg AiConfig) (*LLM, bool) {
 			opts = append(opts, googleai.WithDefaultModel(cfg.Model))
 		}
 		llm.llm, err = googleai.New(context.Background(), opts...)
+	case "anthropic":
+		opts := make([]anthropic.Option, 0)
+		if cfg.ApiKey != "" {
+			opts = append(opts, anthropic.WithToken(cfg.ApiKey))
+		}
+		if cfg.Model != "" {
+			opts = append(opts, anthropic.WithModel(cfg.Model))
+		}
+		llm.llm, err = anthropic.New(opts...)
 	default:
 		err = fmt.Errorf("unknown AI provider: %s", cfg.Provider)
 	}
