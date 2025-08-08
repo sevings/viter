@@ -96,3 +96,7 @@ func (d *Diff) Merge(other *Diff) {
 
 	maps.Copy(d.parts, other.parts)
 }
+
+func (d *Diff) IsEmpty() bool {
+	return len(d.parts) == 0
+}

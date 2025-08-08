@@ -658,6 +658,11 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique, nTry
 		v.log.Warnw(err.Error())
 		return v.updateChapter(prevChp, crit, nTry+1)
 	}
+	if diff.IsEmpty() {
+		v.log.Warn("no changes found")
+		return v.updateChapter(prevChp, crit, nTry+1)
+	}
+
 	prevDiff.Merge(diff)
 
 	chp := books.NewChapter(prevChp.GetNumber(), prevChp.GetTitle(), prevDiff.Text())
