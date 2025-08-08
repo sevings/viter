@@ -224,9 +224,7 @@ func createValidChapterResponse(number int, title, content string) string {
 }
 
 func createValidDiffResponse() string {
-	return `+This is an improved line of text
- This line remains unchanged
--This line was removed`
+	return `<1>This is an improved line of text</1>`
 }
 
 // Basic Constructor Tests
