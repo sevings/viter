@@ -9,7 +9,15 @@ import (
 )
 
 type Config struct {
-	Ai neural.AiConfig
+	Models Models
+	Ai     []neural.AiConfig
+}
+
+type Models struct {
+	Write    string
+	Update   string
+	Critique string
+	Correct  string
 }
 
 func LoadConfig(path string) (Config, error) {

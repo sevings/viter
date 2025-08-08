@@ -1,6 +1,7 @@
 package neural
 
 type AiConfig struct {
+	Name     string
 	Provider string
 	BaseUrl  string `koanf:"base_url"`
 	ApiKey   string `koanf:"api_key"`

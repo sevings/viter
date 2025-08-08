@@ -133,9 +133,12 @@ func (m *mockTextGenerator) reset() {
 
 func createTestConfig() viter.Config {
 	return viter.Config{
-		Ai: neural.AiConfig{
-			Provider: "test",
-			Model:    "test-model",
+		Ai: []neural.AiConfig{
+			{
+				Name:     "test",
+				Provider: "test",
+				Model:    "test-model",
+			},
 		},
 	}
 }

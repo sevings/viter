@@ -44,6 +44,79 @@ func NewPrompts(lang string) viter.PromptProvider {
 	return pp
 }
 
+func initViter(configPath, path, lang string, debug bool) (*viter.Viter, bool) {
+	var zapLogger *zap.Logger
+	var err error
+	if debug {
+		zapLogger, err = zap.NewDevelopment(zap.WithCaller(false))
+	} else {
+		zapLogger, err = zap.NewProduction(zap.WithCaller(false))
+	}
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = zapLogger.Sync() }()
+
+	zap.ReplaceGlobals(zapLogger)
+	zap.RedirectStdLog(zapLogger)
+	logger := zapLogger.Sugar()
+
+	cfg, err := viter.LoadConfig(configPath)
+	if err != nil {
+		logger.Errorw("Error loading config", "err", err)
+		return nil, false
+	}
+
+	fs := afero.NewOsFs()
+	var defaultTg viter.TextGenerator
+	tgs := make(map[string]viter.TextGenerator)
+	for _, ai := range cfg.Ai {
+		tg, ok := neural.NewLLM(ai)
+		if !ok {
+			return nil, false
+		}
+		if debug {
+			tg.EnableResponseLogging(fs, path)
+		}
+		if defaultTg == nil {
+			defaultTg = tg
+		}
+		tgs[ai.Name] = tg
+	}
+
+	pp := NewPrompts(lang)
+	v, ok := viter.NewViter(cfg, pp, defaultTg)
+	if !ok {
+		return nil, false
+	}
+
+	if tg, exists := tgs[cfg.Models.Write]; exists {
+		v.SetWriteGenerator(tg)
+	} else {
+		logger.Warn("No write generator found")
+	}
+
+	if tg, exists := tgs[cfg.Models.Critique]; exists {
+		v.SetCritiqueGenerator(tg)
+	} else {
+		logger.Warn("No critique generator found")
+	}
+
+	if tg, exists := tgs[cfg.Models.Update]; exists {
+		v.SetUpdateGenerator(tg)
+	} else {
+		logger.Warn("No update generator found")
+	}
+
+	if tg, exists := tgs[cfg.Models.Correct]; exists {
+		v.SetCorrectGenerator(tg)
+	} else {
+		logger.Warn("No correct generator found")
+	}
+
+	return v, true
+}
+
 func main() {
 	var path, lang string
 	var configPath string
@@ -96,43 +169,12 @@ func main() {
 		return
 	}
 
-	var zapLogger *zap.Logger
-	var err error
-	if debug {
-		zapLogger, err = zap.NewDevelopment(zap.WithCaller(false))
-	} else {
-		zapLogger, err = zap.NewProduction(zap.WithCaller(false))
-	}
-	if err != nil {
-		panic(err)
-	}
-	defer func() { _ = zapLogger.Sync() }()
-
-	zap.ReplaceGlobals(zapLogger)
-	zap.RedirectStdLog(zapLogger)
-	logger := zapLogger.Sugar()
-
-	cfg, err := viter.LoadConfig(configPath)
-	if err != nil {
-		logger.Errorw("Error loading config", "err", err)
+	v, ok := initViter(configPath, path, lang, debug)
+	if !ok {
 		return
 	}
 
 	fs := afero.NewOsFs()
-	tg, ok := neural.NewLLM(cfg.Ai)
-	if !ok {
-		return
-	}
-	if debug {
-		tg.EnableResponseLogging(fs, path)
-	}
-
-	pp := NewPrompts(lang)
-	v, ok := viter.NewViter(cfg, pp, tg)
-	if !ok {
-		return
-	}
-
 	if create {
 		ok = v.CreateBook(fs, path)
 	} else {
