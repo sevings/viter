@@ -259,6 +259,7 @@ func (v *Viter) UpdateBook(iterCount int) bool {
 		}
 		for _, chp := range chps {
 			v.book.SetChapter(chp.GetNumber(), chp)
+			v.book.RemoveChapterCritique(chp.GetNumber())
 		}
 		v.book.SetBookImprovements(imps)
 	}

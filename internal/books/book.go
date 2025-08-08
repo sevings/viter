@@ -223,12 +223,22 @@ func (b *Book) writeFile(name string, content []byte) error {
 	filePath := b.getFilePath(name)
 
 	if b.arch {
-		archName := strings.ReplaceAll(name, ".", time.Now().Format("_2006-01-02_15-04-05."))
-		archPath := filepath.Join(b.path, "archived", archName)
-		b.fs.Rename(filePath, archPath)
+		b.archiveFile(name)
 	}
 
 	return afero.WriteFile(b.fs, filePath, content, 0644)
+}
+
+func (b *Book) archiveFile(name string) error {
+	filePath := b.getFilePath(name)
+	archName := strings.ReplaceAll(name, ".", time.Now().Format("_2006-01-02_15-04-05."))
+	archPath := filepath.Join(b.path, "archived", archName)
+	return b.fs.Rename(filePath, archPath)
+}
+
+func (b *Book) removeFile(name string) error {
+	filePath := b.getFilePath(name)
+	return b.fs.Remove(filePath)
 }
 
 func (b *Book) readFile(name string) ([]byte, error) {
@@ -327,6 +337,24 @@ func (b *Book) SetChapterCritique(i int, crit *Critique) error {
 	b.chpsCrit[i-1] = crit
 
 	return b.writeFile(fmt.Sprintf("chapter_%d_critique.md", i), []byte(crit.String()))
+}
+
+func (b *Book) RemoveChapterCritique(i int) error {
+	if i <= 0 || i > len(b.plan) {
+		return ErrInvalidChapterIndex
+	}
+
+	if i > len(b.chpsCrit) {
+		return nil
+	}
+	b.chpsCrit[i-1] = &Critique{}
+
+	name := fmt.Sprintf("chapter_%d_critique.md", i)
+	if b.arch {
+		return b.archiveFile(name)
+	}
+
+	return b.removeFile(name)
 }
 
 func (b *Book) GetFs() afero.Fs {
