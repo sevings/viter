@@ -510,7 +510,7 @@ func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique, nTry int) 
 	v.log.Infow("updating plan")
 
 	hst := neural.NewHistory()
-	hst.AddText(v.pp.WritePlanPrompt(0))
+	hst.AddText(v.pp.WritePlanPrompt(prevPlan.Count()))
 	hst.AddMessage()
 	hst.AddText(v.book.GetMeta().String())
 	hst.AddText(prevPlan.String())
