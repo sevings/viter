@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,12 +26,16 @@ type LLM struct {
 	opts []llms.CallOption
 	fs   afero.Fs
 	path string
+	rpm  int
+	reqs []time.Time
 	log  *zap.SugaredLogger
 }
 
 func NewLLM(cfg AiConfig) (*LLM, bool) {
 	llm := &LLM{
-		log: zap.L().Sugar().Named("llm"),
+		rpm:  cfg.Rpm,
+		reqs: make([]time.Time, 0),
+		log:  zap.L().Sugar().Named("llm"),
 	}
 
 	var err error
@@ -124,8 +129,27 @@ func (llm *LLM) generate(messages []llms.MessageContent, nTry int) (string, bool
 		return "", false
 	}
 
+	if llm.rpm > 0 {
+		for len(llm.reqs) > 0 && time.Since(llm.reqs[0]) > time.Minute {
+			llm.reqs = llm.reqs[1:]
+		}
+		for len(llm.reqs) >= llm.rpm {
+			sec := time.Until(llm.reqs[0].Add(time.Minute)).Seconds()
+			sec = math.Ceil(sec)
+			llm.log.Infow("sleeping", "sec", sec)
+			time.Sleep(time.Duration(sec) * time.Second)
+			llm.reqs = llm.reqs[1:]
+		}
+	}
+
 	resp, err := llm.llm.GenerateContent(context.Background(), messages, llm.opts...)
+	if llm.rpm > 0 {
+		llm.reqs = append(llm.reqs, time.Now())
+	}
 	if err == nil {
+		if len(resp.Choices) == 0 {
+			return llm.generate(messages, nTry+1)
+		}
 		text := resp.Choices[0].Content
 		if text == "" {
 			return llm.generate(messages, nTry+1)
@@ -135,7 +159,21 @@ func (llm *LLM) generate(messages []llms.MessageContent, nTry int) (string, bool
 	}
 
 	if strings.Contains(err.Error(), "Service Unavailable") || strings.Contains(err.Error(), "Error 50") {
-		sec := nTry * 3
+		sec := (nTry + 1) * 3
+		llm.log.Infow("sleeping", "sec", sec)
+		time.Sleep(time.Duration(sec) * time.Second)
+
+		return llm.generate(messages, nTry+1)
+	}
+
+	if strings.Contains(err.Error(), "try again later") {
+		sec := (nTry + 1) * 3
+		if llm.rpm > 0 && len(llm.reqs) > 0 {
+			secf := time.Since(llm.reqs[0]).Seconds()
+			secf = math.Ceil(secf)
+			sec = int(secf)
+		}
+
 		llm.log.Infow("sleeping", "sec", sec)
 		time.Sleep(time.Duration(sec) * time.Second)
 

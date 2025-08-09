@@ -10,5 +10,6 @@ type AiConfig struct {
 	TopK     int     `koanf:"tok_k"`
 	RepPen   float64 `koanf:"rep_pen"`
 	MaxTok   int     `koanf:"max_tok"`
+	Rpm      int     `koanf:"rpm"`
 	Stop     []string
 }
