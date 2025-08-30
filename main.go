@@ -90,29 +90,7 @@ func initViter(configPath, path, lang string, debug bool) (*viter.Viter, bool) {
 		return nil, false
 	}
 
-	if tg, exists := tgs[cfg.Models.Write]; exists {
-		v.SetWriteGenerator(tg)
-	} else {
-		logger.Warn("No write generator found")
-	}
-
-	if tg, exists := tgs[cfg.Models.Critique]; exists {
-		v.SetCritiqueGenerator(tg)
-	} else {
-		logger.Warn("No critique generator found")
-	}
-
-	if tg, exists := tgs[cfg.Models.Update]; exists {
-		v.SetUpdateGenerator(tg)
-	} else {
-		logger.Warn("No update generator found")
-	}
-
-	if tg, exists := tgs[cfg.Models.Correct]; exists {
-		v.SetCorrectGenerator(tg)
-	} else {
-		logger.Warn("No correct generator found")
-	}
+	v.ConfigureGenerators(tgs)
 
 	return v, true
 }

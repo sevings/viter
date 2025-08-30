@@ -1,10 +1,44 @@
-[ai]
+# AI providers configuration
+[[ai]]
+name     = "groq-fast"
+provider = "openai"
+base_url = "https://api.groq.com/openai/v1"
+api_key  = "your_groq_token"
+model    = "llama-3.1-8b-instant"
+temp     = 0.7
+top_k    = 40
+max_tok  = 500
+rep_pen  = 1.2
+stop     = [ ]
+
+[[ai]]
+name     = "groq-large"
 provider = "openai"
 base_url = "https://api.groq.com/openai/v1"
 api_key  = "your_groq_token"
 model    = "llama-3.1-70b-versatile"
 temp     = 0.7
 top_k    = 40
-max_tok  = 500
+max_tok  = 1000
 rep_pen  = 1.2
 stop     = [ ]
+
+# Model assignments for different generation types
+[models]
+write_meta = "groq-large"
+critique_meta = "groq-large"
+update_meta = "groq-large"
+write_plan = "groq-large"
+critique_plan = "groq-large"
+update_plan = "groq-large"
+write_chapter = "groq-large"
+critique_chapter = "groq-large"
+update_chapter = "groq-large"
+critique_book = "groq-large"
+correct_text = "groq-fast"
+
+# These will be used as fallbacks if specific generators are not set
+write = "groq-large"
+critique = "groq-large"
+update = "groq-large"
+correct = "groq-fast"

@@ -36,10 +36,7 @@ type TextGenerator interface {
 }
 
 type Viter struct {
-	wtg  TextGenerator
-	utg  TextGenerator
-	ctg  TextGenerator
-	ftg  TextGenerator
+	gm   *GeneratorManager
 	pp   PromptProvider
 	book *books.Book
 	log  *zap.SugaredLogger
@@ -48,32 +45,16 @@ type Viter struct {
 
 func NewViter(cfg Config, pp PromptProvider, tg TextGenerator) (*Viter, bool) {
 	v := &Viter{
-		wtg: tg,
-		utg: tg,
-		ctg: tg,
-		ftg: tg,
+		gm:  NewGeneratorManager(tg),
 		pp:  pp,
-		log: zap.L().Sugar().Named("viter"),
+		log: zap.S().Named("viter"),
 		cfg: cfg,
 	}
-
 	return v, true
 }
 
-func (v *Viter) SetWriteGenerator(tg TextGenerator) {
-	v.wtg = tg
-}
-
-func (v *Viter) SetCritiqueGenerator(tg TextGenerator) {
-	v.ctg = tg
-}
-
-func (v *Viter) SetUpdateGenerator(tg TextGenerator) {
-	v.utg = tg
-}
-
-func (v *Viter) SetCorrectGenerator(tg TextGenerator) {
-	v.ftg = tg
+func (v *Viter) ConfigureGenerators(tgs map[string]TextGenerator) {
+	v.gm.ConfigureFromModels(v.cfg.Models, tgs)
 }
 
 func (v *Viter) CreateBook(fs afero.Fs, path string) bool {
@@ -383,7 +364,7 @@ func (v *Viter) writeMeta(prevMeta *books.BookMeta, nTry int) (*books.BookMeta, 
 	hst.AddMessage()
 	hst.AddText(prevMeta.String())
 
-	metaData, ok := v.wtg.GenerateText(hst.Messages())
+	metaData, ok := v.gm.GenerateText(WriteMeta, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -411,7 +392,7 @@ func (v *Viter) critiqueMeta(meta *books.BookMeta, nTry int) (*books.Critique, b
 	hst.AddMessage()
 	hst.AddText(meta.String())
 
-	critData, ok := v.ctg.GenerateText(hst.Messages())
+	critData, ok := v.gm.GenerateText(CritiqueMeta, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -445,7 +426,7 @@ func (v *Viter) updateMeta(prevMeta *books.BookMeta, crit *books.Critique, nTry 
 	hst.AddText(crit.GetImprovements())
 	hst.AddText(v.pp.UpdateMetaPrompt())
 
-	metaData, ok := v.utg.GenerateText(hst.Messages())
+	metaData, ok := v.gm.GenerateText(UpdateMeta, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -476,7 +457,7 @@ func (v *Viter) writePlan(prevPlan books.Plan, chapterCount, nTry int) (books.Pl
 		hst.AddText(prevPlan.String())
 	}
 
-	planData, ok := v.wtg.GenerateText(hst.Messages())
+	planData, ok := v.gm.GenerateText(WritePlan, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -505,7 +486,7 @@ func (v *Viter) critiquePlan(plan books.Plan, nTry int) (*books.Critique, bool) 
 	hst.AddText(v.book.GetMeta().String())
 	hst.AddText(plan.String())
 
-	critData, ok := v.ctg.GenerateText(hst.Messages())
+	critData, ok := v.gm.GenerateText(CritiquePlan, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -540,7 +521,7 @@ func (v *Viter) updatePlan(prevPlan books.Plan, crit *books.Critique, nTry int) 
 	hst.AddText(crit.GetImprovements())
 	hst.AddText(v.pp.UpdatePlanPrompt())
 
-	planData, ok := v.utg.GenerateText(hst.Messages())
+	planData, ok := v.gm.GenerateText(UpdatePlan, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -585,7 +566,7 @@ func (v *Viter) writeChapter(n, nTry int) (*books.Chapter, bool) {
 	}
 	hst.AddText(planChp.String())
 
-	chapterData, ok := v.wtg.GenerateText(hst.Messages())
+	chapterData, ok := v.gm.GenerateText(WriteChapter, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -625,7 +606,7 @@ func (v *Viter) critiqueChapter(chapter *books.Chapter, nTry int) (*books.Critiq
 	hst.AddText(chapter.String())
 	hst.AddText(v.pp.CritiqueNChapterPrompt(chapter.GetNumber()))
 
-	critData, ok := v.ctg.GenerateText(hst.Messages())
+	critData, ok := v.gm.GenerateText(CritiqueChapter, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -671,7 +652,7 @@ func (v *Viter) updateChapter(prevChp *books.Chapter, crit *books.Critique, nTry
 	hst.AddText(v.pp.UpdateNChapterPrompt(prevChp.GetNumber()))
 	hst.AddText(crit.GetImprovements())
 
-	diffData, ok := v.utg.GenerateText(hst.Messages())
+	diffData, ok := v.gm.GenerateText(UpdateChapter, hst.Messages())
 	if !ok {
 		return nil, false
 	}
@@ -706,11 +687,12 @@ func (v *Viter) critiqueBook(chps []*books.Chapter) (books.Plan, bool) {
 	}
 	hst.AddText(v.pp.CritiqueBook2Prompt())
 
-	review, ok := v.ctg.GenerateText(hst.Messages())
+	review, ok := v.gm.GenerateText(CritiqueBook, hst.Messages())
 	if !ok {
 		return books.Plan{}, false
 	}
 
+	v.log.Infow("critiqued book")
 	hst.AddMessage()
 	hst.AddText(review)
 
@@ -727,7 +709,7 @@ func (v *Viter) critiqueBook(chps []*books.Chapter) (books.Plan, bool) {
 		var imps books.Plan
 		var err error
 		for range maxTries {
-			impData, ok := v.ctg.GenerateText(hst.Messages())
+			impData, ok := v.gm.GenerateText(CritiqueBook, hst.Messages())
 			if !ok {
 				continue
 			}
@@ -883,7 +865,7 @@ func (v *Viter) correctText(text string) (string, bool) {
 	hst.AddMessage()
 	hst.AddText(text)
 
-	correctedData, ok := v.ftg.GenerateText(hst.Messages())
+	correctedData, ok := v.gm.GenerateText(CorrectText, hst.Messages())
 	if !ok {
 		return "", false
 	}
